@@ -199,7 +199,8 @@
 
     <div class="field">
       <label for="widthInput">Width (full) <output id="widthInputVal"></output></label>
-      <input type="range" id="widthInput" min="4" max="12" step="0.0625">
+      <input type="range" id="widthInput" min="4" max="10" step="0.0625">
+      <div class="hint">Capped at 10" so each half (with room for foil-cusp bulge) always prints true-to-scale on one 8.5×11 sheet — never the scaled/gridded fallback.</div>
     </div>
 
     <div class="field" id="field-height">
@@ -638,7 +639,7 @@
 
     // below the ruler is the natural spot when there's room; otherwise use
     // whichever side of the shape has more free space (always available at
-    // these slider bounds: width tops out at 12in / halfW 6in, which still
+    // these slider bounds: width tops out at 10in / halfW 5in, which still
     // leaves >=1.4in of margin on one side or the other)
     const sideW = Math.max(freeRightW, freeLeftW);
     const useSideColumn = freeBottomH < 1.6 && sideW >= 1.4;
