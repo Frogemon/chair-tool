@@ -156,10 +156,16 @@
     z-index: 1000; align-items: center; justify-content: center; padding: 20px;
   }
   #pngModalInner { background: var(--surface); color: var(--text); border-radius: 10px; padding: 16px; max-width: 92vw; max-height: 92vh; overflow: auto; text-align: center; }
-  #pngModalImg { max-width: 80vw; max-height: 70vh; border: 1px solid var(--border); background: #fff; }
   #pngModalHelp { font-size: 13px; color: var(--text-muted); max-width: 480px; margin: 10px auto; }
   #pngModalClose { float: right; border: none; background: var(--surface-alt); color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
-  #pngDownloadLink { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--accent); }
+  #pngModalPages { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+  .pngPage { max-width: 42vw; }
+  .pngPage h3 { font-size: 13px; margin: 0 0 6px; color: var(--text); }
+  .pngPage img { max-width: 42vw; max-height: 65vh; border: 1px solid var(--border); background: #fff; display: block; }
+  .pngPage a { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--accent); }
+  @media (max-width: 640px) {
+    .pngPage, .pngPage img { max-width: 88vw; }
+  }
 
   /* ---------- responsive breakpoints ---------- */
   @media (max-width: 640px) {
@@ -258,12 +264,10 @@
   <div id="pngModalInner">
     <button id="pngModalClose" type="button">Close</button>
     <p id="pngModalHelp">
-      This is your printable pattern at 300&nbsp;dpi. Press and hold the image to save it to your photo library.
+      These are your two printable pages at 300&nbsp;dpi — one full half-pattern each. Press and hold an image to save it to your photo library.
       If your browser doesn't offer a save option, take a screenshot instead — that always works.
     </p>
-    <img id="pngModalImg" alt="Generated pattern PNG">
-    <br>
-    <a id="pngDownloadLink" download="backrest-arch-pattern.png">Download PNG</a>
+    <div id="pngModalPages"></div>
   </div>
 </div>
 
@@ -466,16 +470,19 @@
   // preview
   // ---------------------------------------------------------------
 
-  function drawPreview(outline, bbox) {
+  function drawPreview(outline, bbox, halfBBox) {
     const svg = document.getElementById('previewSvg');
     svg.innerHTML = '';
 
-    const guideX = Math.min(0, bbox.minX), guideY = bbox.minY;
-    const fits = bbox.w <= USABLE_W && bbox.h <= USABLE_H;
+    // each half prints on its own sheet, so the fit check and the guide
+    // rectangle describe one half's footprint (drawn over the right half),
+    // not the full mirrored shape
+    const guideX = 0, guideY = halfBBox.minY;
+    const fits = halfBBox.width <= USABLE_W && halfBBox.height <= USABLE_H;
     const stroke = fits ? 'var(--guide-ok)' : 'var(--guide-warn)';
 
-    // viewBox must cover the union of the shape and the page-boundary guide
-    // (the guide is often larger than a small design) or the guide clips
+    // viewBox must cover the union of the full shape and the page-boundary
+    // guide (the guide is often larger than a small design) or it clips
     const unionMinX = Math.min(bbox.minX, guideX), unionMaxX = Math.max(bbox.maxX, guideX + USABLE_W);
     const unionMinY = Math.min(bbox.minY, guideY), unionMaxY = Math.max(bbox.maxY, guideY + USABLE_H);
     const unionW = unionMaxX - unionMinX, unionH = unionMaxY - unionMinY;
@@ -490,7 +497,7 @@
     }));
     svg.appendChild(textEl({
       x: guideX + 0.1, y: guideY - pad * 0.25, 'font-size': Math.max(vw, vh) * 0.032, fill: stroke, 'font-family': 'sans-serif'
-    }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet — will scale down for print'));
+    }, fits ? '✓ each half fits one 8.5×11 sheet' : '⚠ each half exceeds one sheet — will scale down for print'));
 
     svg.appendChild(el('line', {
       x1: 0, y1: vy, x2: 0, y2: vy + vh, stroke: 'var(--centerline)', 'stroke-width': vw * 0.002,
@@ -584,13 +591,14 @@
     return g;
   }
 
-  function printLabelParagraphs(shape, scale, extra) {
+  function printLabelParagraphs(shape, scale, extra, pageLabel) {
     const paras = [];
+    if (pageLabel) paras.push(pageLabel);
     if (extra) paras.push(extra);
     paras.push('Backrest Arch — ' + (state.family === 'arc' ? 'Arc' : 'Pointed') + ' family');
     paras.push('Full width: ' + shape.w.toFixed(3) + '" (' + toFraction16(shape.w) + ')   Full height: ' + shape.h.toFixed(3) + '" (' + toFraction16(shape.h) + ')');
-    paras.push('SOLID line = cut line     DASHED line = centerline / mirror-fold line');
-    paras.push('Align the dashed edge with your material’s true centerline, trace, flip the paper over that line, and trace again.');
+    paras.push('SOLID line = cut line     DASHED line = centerline seam');
+    paras.push('Print both pages. Trim each sheet along its dashed line, then tape the two trimmed edges together to assemble the complete pattern.');
     paras.push(scale < 1 ? ('Scaled to ' + (scale * 100).toFixed(0) + '% to fit — see grid overlay to reconstruct full size.') : 'Printed at true 1:1 scale.');
     return paras;
   }
@@ -612,11 +620,14 @@
   // below the ruler normally, or beside the shape when a tall design leaves
   // little room at the bottom. Positions are derived from the shape's actual
   // printed footprint so nothing here overlaps the traced curve itself.
-  function buildFooter(shapeRight, shapeBottom, shape, scale, extraParagraph) {
+  // shapeLeft/shapeRight are both needed (not just shapeRight) because the
+  // mirrored/left-half page has its free space on the opposite side.
+  function buildFooter(shapeLeft, shapeRight, shapeBottom, shape, scale, extraParagraph, pageLabel) {
     const g = el('g', {});
     const freeRightW = (PAGE_W - MARGIN) - shapeRight;
+    const freeLeftW = shapeLeft - MARGIN;
     const freeBottomH = (PAGE_H - MARGIN) - shapeBottom;
-    const paragraphs = printLabelParagraphs(shape, scale, extraParagraph);
+    const paragraphs = printLabelParagraphs(shape, scale, extraParagraph, pageLabel);
 
     // clamp so the ruler's own content (not just its anchor) always ends
     // before the physical page bottom -- this is what was missing before
@@ -626,14 +637,18 @@
     const rulerBottom = rulerY + rulerContentH;
 
     // below the ruler is the natural spot when there's room; otherwise use
-    // the column beside the shape (always available at these slider bounds:
-    // width tops out at 12in / halfW 6in, which still leaves >=1.4in of margin)
-    const useRightColumn = freeBottomH < 1.6 && freeRightW >= 1.4;
-    if (!useRightColumn) {
+    // whichever side of the shape has more free space (always available at
+    // these slider bounds: width tops out at 12in / halfW 6in, which still
+    // leaves >=1.4in of margin on one side or the other)
+    const sideW = Math.max(freeRightW, freeLeftW);
+    const useSideColumn = freeBottomH < 1.6 && sideW >= 1.4;
+    if (!useSideColumn) {
       const startY = Math.min(Math.max(rulerBottom + 0.12, MARGIN), PAGE_H - 1.0);
       g.appendChild(textBlock(paragraphs, MARGIN, startY, USABLE_W, 0.11, 0.155));
     } else {
-      g.appendChild(textBlock(paragraphs, shapeRight + 0.2, MARGIN + 0.05, freeRightW - 0.3, 0.105, 0.15));
+      const onRight = freeRightW >= freeLeftW;
+      const x = onRight ? shapeRight + 0.2 : MARGIN;
+      g.appendChild(textBlock(paragraphs, x, MARGIN + 0.05, sideW - 0.3, 0.105, 0.15));
     }
     return g;
   }
@@ -647,23 +662,31 @@
     return candidates[candidates.length - 1];
   }
 
-  function renderOnePageSheet(rightPts, halfBBox, shape) {
+  // mirror=false: centerline anchored at the page's left margin, shape
+  // extends right (this is the right half of the design).
+  // mirror=true: centerline anchored at the page's right margin, shape
+  // extends left (the left half) -- so the two printed sheets can be
+  // trimmed along their dashed edges and taped together, centerline to
+  // centerline, to assemble the complete symmetric pattern.
+  function renderOnePageSheet(pts, halfBBox, shape, mirror, pageLabel) {
     const svg = svgPage();
-    const originX = MARGIN - halfBBox.minX, originY = MARGIN - halfBBox.minY;
+    const originX = mirror ? (PAGE_W - MARGIN) - halfBBox.maxX : MARGIN - halfBBox.minX;
+    const originY = MARGIN - halfBBox.minY;
     const g = el('g', { transform: 'translate(' + originX + ' ' + originY + ')' });
-    const parts = buildHalfPathParts(rightPts, shape.h);
+    const parts = buildHalfPathParts(pts, shape.h);
     g.appendChild(el('path', { d: parts.solid, fill: 'none', stroke: '#000', 'stroke-width': 0.02 }));
     g.appendChild(el('path', { d: parts.dashed, fill: 'none', stroke: '#000', 'stroke-width': 0.015, 'stroke-dasharray': '0.08 0.06' }));
     svg.appendChild(g);
-    svg.appendChild(buildFooter(originX + halfBBox.maxX, originY + halfBBox.maxY, shape, 1, null));
+    svg.appendChild(buildFooter(originX + halfBBox.minX, originX + halfBBox.maxX, originY + halfBBox.maxY, shape, 1, null, pageLabel));
     return wrapPrintPage(svg);
   }
 
-  function renderScaledGridFallback(rightPts, halfBBox, shape) {
+  function renderScaledGridFallback(pts, halfBBox, shape, mirror, pageLabel) {
     const svg = svgPage();
     const scale = Math.min(USABLE_W / halfBBox.width, USABLE_H / halfBBox.height, 1);
     const spacing = chooseGridSpacing(halfBBox.width, halfBBox.height);
-    const originX = MARGIN - halfBBox.minX * scale, originY = MARGIN - halfBBox.minY * scale;
+    const originX = mirror ? (PAGE_W - MARGIN) - halfBBox.maxX * scale : MARGIN - halfBBox.minX * scale;
+    const originY = MARGIN - halfBBox.minY * scale;
 
     const gridG = el('g', { transform: 'translate(' + originX + ' ' + originY + ') scale(' + scale + ')', stroke: '#f08c00', 'stroke-width': (0.01 / scale) });
     for (let gx = 0; gx <= halfBBox.maxX + 0.001; gx += spacing) {
@@ -675,26 +698,34 @@
     svg.appendChild(gridG);
 
     const g = el('g', { transform: 'translate(' + originX + ' ' + originY + ') scale(' + scale + ')' });
-    const parts = buildHalfPathParts(rightPts, shape.h);
+    const parts = buildHalfPathParts(pts, shape.h);
     g.appendChild(el('path', { d: parts.solid, fill: 'none', stroke: '#000', 'stroke-width': (0.02 / scale) }));
     g.appendChild(el('path', { d: parts.dashed, fill: 'none', stroke: '#000', 'stroke-width': (0.015 / scale), 'stroke-dasharray': (0.08 / scale) + ' ' + (0.06 / scale) }));
     svg.appendChild(g);
 
     const gridNote = 'Enlargement grid: each square = ' + spacing + '" at full size. Mark a matching ' + spacing + '" grid on your stock, plot the curve where it crosses each line, then connect the points.';
-    svg.appendChild(buildFooter(originX + halfBBox.maxX * scale, originY + halfBBox.maxY * scale, shape, scale, gridNote));
+    svg.appendChild(buildFooter(originX + halfBBox.minX * scale, originX + halfBBox.maxX * scale, originY + halfBBox.maxY * scale, shape, scale, gridNote, pageLabel));
     return wrapPrintPage(svg);
   }
 
+  // Every design prints as exactly two 8.5x11 pages, one per half -- never
+  // a single fold-and-flip sheet, and never more than one sheet per half.
   function buildPrintSheet(outline, shape) {
     const printSheetEl = document.getElementById('printSheet');
     printSheetEl.innerHTML = '';
     const rightPts = outline.rightPts;
-    const halfBBox = computeHalfBBox(rightPts, shape.h);
-    if (halfBBox.width <= USABLE_W && halfBBox.height <= USABLE_H) {
-      printSheetEl.appendChild(renderOnePageSheet(rightPts, halfBBox, shape));
-    } else {
-      printSheetEl.appendChild(renderScaledGridFallback(rightPts, halfBBox, shape));
+    const leftPts = rightPts.map(function (p) { return { x: -p.x, y: p.y }; });
+
+    function buildPage(pts, mirror, pageLabel) {
+      const halfBBox = computeHalfBBox(pts, shape.h);
+      if (halfBBox.width <= USABLE_W && halfBBox.height <= USABLE_H) {
+        return renderOnePageSheet(pts, halfBBox, shape, mirror, pageLabel);
+      }
+      return renderScaledGridFallback(pts, halfBBox, shape, mirror, pageLabel);
     }
+
+    printSheetEl.appendChild(buildPage(rightPts, false, 'Page 1 of 2 — right half'));
+    printSheetEl.appendChild(buildPage(leftPts, true, 'Page 2 of 2 — left half (mirrored)'));
   }
 
   // ---------------------------------------------------------------
@@ -707,7 +738,8 @@
     if (state.foiled) rightPts = applyFoilCusps(rightPts, shape.halfW, state.lobes);
     const outline = buildOutline(rightPts);
     const bbox = computeBBox(outline.allPts);
-    drawPreview(outline, bbox);
+    const halfBBox = computeHalfBBox(rightPts, shape.h);
+    drawPreview(outline, bbox, halfBBox);
     updateDims(shape, bbox);
     buildPrintSheet(outline, shape);
   }
@@ -746,20 +778,40 @@
     });
   }
 
-  function showPngModal(url) {
-    document.getElementById('pngModalImg').src = url;
-    document.getElementById('pngDownloadLink').href = url;
+  function showPngModal(blobs) {
+    const container = document.getElementById('pngModalPages');
+    container.innerHTML = '';
+    const labels = ['Page 1 — right half', 'Page 2 — left half (mirrored)'];
+    blobs.forEach(function (blob, i) {
+      const url = URL.createObjectURL(blob);
+      const wrap = document.createElement('div');
+      wrap.className = 'pngPage';
+      const h3 = document.createElement('h3');
+      h3.textContent = labels[i] || ('Page ' + (i + 1));
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = h3.textContent;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'backrest-arch-pattern-page' + (i + 1) + '.png';
+      a.textContent = 'Download PNG';
+      wrap.appendChild(h3);
+      wrap.appendChild(img);
+      wrap.appendChild(document.createElement('br'));
+      wrap.appendChild(a);
+      container.appendChild(wrap);
+    });
     document.getElementById('pngModal').style.display = 'flex';
   }
 
   function onExport() {
-    const svg = document.querySelector('#printSheet svg');
-    if (!svg) return;
-    svgToPngBlob(svg, 300).then(function (blob) {
-      showPngModal(URL.createObjectURL(blob));
-    }).catch(function (err) {
-      alert('PNG export failed: ' + err.message);
-    });
+    const svgs = document.querySelectorAll('#printSheet svg');
+    if (!svgs.length) return;
+    Promise.all(Array.prototype.map.call(svgs, function (svg) { return svgToPngBlob(svg, 300); }))
+      .then(showPngModal)
+      .catch(function (err) {
+        alert('PNG export failed: ' + err.message);
+      });
   }
 
   function onPrint() {
@@ -767,10 +819,13 @@
       window.print();
     } catch (e) {
       try {
-        const svg = document.querySelector('#printSheet svg');
+        const svgs = document.querySelectorAll('#printSheet svg');
         const w = window.open('', '_blank');
         if (!w) throw new Error('popup blocked');
-        w.document.write('<html><head><title>Print pattern</title></head><body style="margin:0">' + svg.outerHTML + '</body></html>');
+        const pagesHtml = Array.prototype.map.call(svgs, function (svg) {
+          return '<div style="page-break-after: always;">' + svg.outerHTML + '</div>';
+        }).join('');
+        w.document.write('<html><head><title>Print pattern</title></head><body style="margin:0">' + pagesHtml + '</body></html>');
         w.document.close();
         w.print();
       } catch (e2) {
