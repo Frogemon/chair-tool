@@ -551,6 +551,22 @@
     return lines;
   }
 
+  // Shortened deliberately to comfortably stay on one wrapped line: an
+  // earlier longer version could wrap to two lines for some viewports,
+  // and its height wasn't accounted for where the ruler got positioned,
+  // which let it spill past the bottom of the page for tall designs.
+  var CALIBRATION_TEXT = 'CALIBRATION: this bar must measure exactly 6.00in. If not, your printer rescaled the page — reprint at "Actual Size / 100%".';
+
+  function calibrationRulerLines() {
+    return wrapTextLines(CALIBRATION_TEXT, USABLE_W, 0.09);
+  }
+
+  // vertical space the ruler's own content (ticks, "0"/"6in" labels, and
+  // the wrapped warning text) needs below its anchor point
+  function calibrationRulerContentHeight() {
+    return 0.40 + (calibrationRulerLines().length - 1) * 0.13 + 0.13;
+  }
+
   function calibrationRulerSVG(x, y) {
     const g = el('g', { transform: 'translate(' + x + ' ' + y + ')' });
     g.appendChild(el('line', { x1: 0, y1: 0, x2: 6, y2: 0, stroke: '#000', 'stroke-width': 0.02 }));
@@ -561,7 +577,7 @@
     g.appendChild(textEl({ x: 0, y: 0.22, 'font-size': 0.09, 'font-family': 'sans-serif' }, '0'));
     g.appendChild(textEl({ x: 5.78, y: 0.22, 'font-size': 0.09, 'font-family': 'sans-serif' }, '6in'));
     let wy = 0.40;
-    wrapTextLines('CALIBRATION: this bar must measure exactly 6.00in when printed. If it doesn’t, your printer rescaled the page — reprint at "Actual Size / 100%".', USABLE_W, 0.09).forEach(function (line) {
+    calibrationRulerLines().forEach(function (line) {
       g.appendChild(textEl({ x: 0, y: wy, 'font-size': 0.09, 'font-family': 'sans-serif', fill: '#c92a2a' }, line));
       wy += 0.13;
     });
@@ -602,15 +618,19 @@
     const freeBottomH = (PAGE_H - MARGIN) - shapeBottom;
     const paragraphs = printLabelParagraphs(shape, scale, extraParagraph);
 
-    const rulerY = Math.min(shapeBottom + 0.28, PAGE_H - 0.22);
+    // clamp so the ruler's own content (not just its anchor) always ends
+    // before the physical page bottom -- this is what was missing before
+    const rulerContentH = calibrationRulerContentHeight();
+    const rulerY = Math.min(shapeBottom + 0.28, PAGE_H - rulerContentH - 0.05);
     g.appendChild(calibrationRulerSVG(MARGIN, rulerY));
+    const rulerBottom = rulerY + rulerContentH;
 
     // below the ruler is the natural spot when there's room; otherwise use
     // the column beside the shape (always available at these slider bounds:
     // width tops out at 12in / halfW 6in, which still leaves >=1.4in of margin)
     const useRightColumn = freeBottomH < 1.6 && freeRightW >= 1.4;
     if (!useRightColumn) {
-      const startY = Math.min(rulerY + 0.55, PAGE_H - 1.1);
+      const startY = Math.min(Math.max(rulerBottom + 0.12, MARGIN), PAGE_H - 1.0);
       g.appendChild(textBlock(paragraphs, MARGIN, startY, USABLE_W, 0.11, 0.155));
     } else {
       g.appendChild(textBlock(paragraphs, shapeRight + 0.2, MARGIN + 0.05, freeRightW - 0.3, 0.105, 0.15));
