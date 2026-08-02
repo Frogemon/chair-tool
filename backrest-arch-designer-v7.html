@@ -138,9 +138,16 @@
   .printPage svg { width: 8.5in; height: 11in; display: block; }
 
   @media print {
-    body * { visibility: hidden; }
-    #printSheet, #printSheet * { visibility: visible; }
-    #printSheet { display: block !important; position: absolute; top: 0; left: 0; }
+    /* @page removes the browser/OS's own default margins, which would
+       otherwise stack on top of the 0.5in margin already baked into the
+       pattern layout and shrink the usable area. Removing #app from the
+       layout (not just hiding it) matters too: its 100vh sidebar was still
+       occupying document height while invisible, which was enough on its
+       own to spill the bottom of a full page onto a phantom second sheet */
+    @page { size: 8.5in 11in; margin: 0; }
+    html, body { margin: 0; height: auto; }
+    #app, #pngModal { display: none !important; }
+    #printSheet { display: block !important; }
   }
 
   /* ---------- PNG export modal ---------- */
