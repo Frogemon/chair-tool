@@ -5,83 +5,136 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Backrest Arch Designer</title>
 <style>
+  :root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --surface-alt: #eaeff4;
+    --border: #dbe1e8;
+    --text: #171a20;
+    --text-muted: #626c7a;
+    --accent: #1c5fa8;
+    --accent-contrast: #ffffff;
+    --track: #d7dbe1;
+    --thumb-disabled: #aab1ba;
+    --shape-fill: #cfe4f7;
+    --shape-stroke: #1c5fa8;
+    --centerline: #97a3b0;
+    --guide-ok: #2f8f4e;
+    --guide-warn: #c8402f;
+    --modal-scrim: rgba(10, 14, 20, 0.82);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13161d;
+      --surface: #1a1f28;
+      --surface-alt: #212836;
+      --border: #313a48;
+      --text: #e8ecf2;
+      --text-muted: #98a3b3;
+      --accent: #6fa9e0;
+      --accent-contrast: #0c1520;
+      --track: #3a4453;
+      --thumb-disabled: #55606f;
+      --shape-fill: #223449;
+      --shape-stroke: #7ab4ea;
+      --centerline: #586373;
+      --guide-ok: #57c37c;
+      --guide-warn: #ef7263;
+      --modal-scrim: rgba(4, 6, 10, 0.88);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #13161d; --surface: #1a1f28; --surface-alt: #212836; --border: #313a48;
+    --text: #e8ecf2; --text-muted: #98a3b3; --accent: #6fa9e0; --accent-contrast: #0c1520;
+    --track: #3a4453; --thumb-disabled: #55606f; --shape-fill: #223449; --shape-stroke: #7ab4ea;
+    --centerline: #586373; --guide-ok: #57c37c; --guide-warn: #ef7263; --modal-scrim: rgba(4, 6, 10, 0.88);
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f5; --surface: #ffffff; --surface-alt: #eaeff4; --border: #dbe1e8;
+    --text: #171a20; --text-muted: #626c7a; --accent: #1c5fa8; --accent-contrast: #ffffff;
+    --track: #d7dbe1; --thumb-disabled: #aab1ba; --shape-fill: #cfe4f7; --shape-stroke: #1c5fa8;
+    --centerline: #97a3b0; --guide-ok: #2f8f4e; --guide-warn: #c8402f; --modal-scrim: rgba(10, 14, 20, 0.82);
+  }
+
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #1a1a1a; background: #f4f5f7;
+    color: var(--text); background: var(--bg);
   }
   #app { display: flex; height: 100vh; width: 100%; overflow: hidden; }
 
   /* ---------- sidebar ---------- */
   #controls {
     width: 340px; min-width: 240px; flex-shrink: 0;
-    background: #fff; border-right: 1px solid #e0e2e6;
+    background: var(--surface); border-right: 1px solid var(--border);
     overflow-y: auto; padding: 16px 18px 40px;
   }
   #controls h1 { font-size: 17px; margin: 0 0 4px; }
-  #controls .sub { font-size: 12px; color: #6b7280; margin: 0 0 16px; }
+  #controls .sub { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
   .familyToggle { display: flex; gap: 6px; margin-bottom: 14px; }
   .familyToggle button {
-    flex: 1; padding: 9px 6px; font-size: 13px; border: 1px solid #cbd2d9;
-    background: #f8f9fb; border-radius: 8px; cursor: pointer;
+    flex: 1; padding: 9px 6px; font-size: 13px; border: 1px solid var(--border);
+    background: var(--surface-alt); color: var(--text); border-radius: 8px; cursor: pointer;
   }
-  .familyToggle button.active { background: #1864ab; color: #fff; border-color: #1864ab; }
+  .familyToggle button.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 
   fieldset { border: 0; padding: 0; margin: 0 0 14px; }
   .field { margin-bottom: 14px; }
   .field label {
     display: flex; justify-content: space-between; font-size: 12.5px;
-    font-weight: 600; color: #374151; margin-bottom: 4px;
+    font-weight: 600; color: var(--text); margin-bottom: 4px;
   }
-  .field label output, .field label span.val { font-weight: 400; color: #1864ab; }
-  .field .hint { font-size: 11px; color: #8a919c; margin-top: 3px; }
+  .field label output, .field label span.val { font-weight: 400; color: var(--accent); }
+  .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
   select#presetSelect {
-    width: 100%; padding: 8px; font-size: 13px; border: 1px solid #cbd2d9;
-    border-radius: 8px; background: #fff; margin-bottom: 16px;
+    width: 100%; padding: 8px; font-size: 13px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--surface); color: var(--text); margin-bottom: 16px;
   }
 
-  label.checkRow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 14px; }
+  label.checkRow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
   label.checkRow input { width: 20px; height: 20px; }
 
   input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; touch-action: pan-y; }
-  input[type=range]::-webkit-slider-runnable-track { height: 4px; background: #d7dbe0; border-radius: 2px; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--track); border-radius: 2px; }
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
-    background: #1864ab; border: 2px solid #fff; margin-top: -10px;
+    background: var(--accent); border: 2px solid var(--surface); margin-top: -10px;
     box-shadow: 0 1px 3px rgba(0,0,0,.45);
   }
-  input[type=range]::-moz-range-track { height: 4px; background: #d7dbe0; border-radius: 2px; }
+  input[type=range]::-moz-range-track { height: 4px; background: var(--track); border-radius: 2px; }
   input[type=range]::-moz-range-thumb {
-    width: 24px; height: 24px; border-radius: 50%; background: #1864ab;
-    border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.45);
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent);
+    border: 2px solid var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.45);
   }
-  input[type=range]:disabled::-webkit-slider-thumb { background: #aab1ba; }
-  input[type=range]:disabled::-moz-range-thumb { background: #aab1ba; }
+  input[type=range]:disabled::-webkit-slider-thumb { background: var(--thumb-disabled); }
+  input[type=range]:disabled::-moz-range-thumb { background: var(--thumb-disabled); }
 
   .actionRow { display: flex; gap: 8px; margin-top: 18px; }
   .actionRow button {
     flex: 1; padding: 11px 8px; font-size: 13.5px; font-weight: 600;
-    border-radius: 8px; border: 1px solid #1864ab; cursor: pointer;
+    border-radius: 8px; border: 1px solid var(--accent); cursor: pointer;
   }
-  #printBtn { background: #1864ab; color: #fff; }
-  #exportBtn { background: #fff; color: #1864ab; }
+  #printBtn { background: var(--accent); color: var(--accent-contrast); }
+  #exportBtn { background: var(--surface); color: var(--accent); }
 
-  #derivedHeightNote { font-size: 12px; color: #6b7280; background: #f1f3f5; border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; }
+  #derivedHeightNote { font-size: 12px; color: var(--text-muted); background: var(--surface-alt); border-radius: 8px; padding: 8px 10px; margin-bottom: 14px; }
 
   /* ---------- drag handle ---------- */
-  #dragHandle { width: 6px; flex-shrink: 0; cursor: col-resize; background: #e9ecef; touch-action: none; }
-  #dragHandle:hover, #dragHandle.dragging { background: #1864ab; }
+  #dragHandle { width: 6px; flex-shrink: 0; cursor: col-resize; background: var(--border); touch-action: none; }
+  #dragHandle:hover, #dragHandle.dragging { background: var(--accent); }
 
   /* ---------- stage / preview ---------- */
   #stage { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; position: relative; }
-  #previewSvg { width: 100%; height: 100%; max-width: 800px; max-height: 800px; background: #fff; border: 1px solid #e0e2e6; border-radius: 4px; }
-  #dims { margin-top: 10px; font-size: 13px; color: #374151; text-align: center; }
+  #previewSvg { width: 100%; height: 100%; max-width: 800px; max-height: 800px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+  #dims { margin-top: 10px; font-size: 13px; color: var(--text-muted); text-align: center; font-variant-numeric: tabular-nums; }
 
-  /* ---------- print sheet (offscreen, only used for print/export) ---------- */
+  /* ---------- print sheet (offscreen, only used for print/export) ----------
+     always rendered black-on-white regardless of app theme: it's a physical
+     tracing template, not a themed UI surface */
   #printSheet { display: none; }
-  .printPage { width: 8.5in; height: 11in; page-break-after: always; }
+  .printPage { width: 8.5in; height: 11in; page-break-after: always; background: #fff; }
   .printPage svg { width: 8.5in; height: 11in; display: block; }
 
   @media print {
@@ -92,19 +145,19 @@
 
   /* ---------- PNG export modal ---------- */
   #pngModal {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    display: none; position: fixed; inset: 0; background: var(--modal-scrim);
     z-index: 1000; align-items: center; justify-content: center; padding: 20px;
   }
-  #pngModalInner { background: #fff; border-radius: 10px; padding: 16px; max-width: 92vw; max-height: 92vh; overflow: auto; text-align: center; }
-  #pngModalImg { max-width: 80vw; max-height: 70vh; border: 1px solid #ccc; }
-  #pngModalHelp { font-size: 13px; color: #374151; max-width: 480px; margin: 10px auto; }
-  #pngModalClose { float: right; border: none; background: #eee; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
-  #pngDownloadLink { display: inline-block; margin-top: 8px; font-size: 13px; color: #1864ab; }
+  #pngModalInner { background: var(--surface); color: var(--text); border-radius: 10px; padding: 16px; max-width: 92vw; max-height: 92vh; overflow: auto; text-align: center; }
+  #pngModalImg { max-width: 80vw; max-height: 70vh; border: 1px solid var(--border); background: #fff; }
+  #pngModalHelp { font-size: 13px; color: var(--text-muted); max-width: 480px; margin: 10px auto; }
+  #pngModalClose { float: right; border: none; background: var(--surface-alt); color: var(--text); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  #pngDownloadLink { display: inline-block; margin-top: 8px; font-size: 13px; color: var(--accent); }
 
   /* ---------- responsive breakpoints ---------- */
   @media (max-width: 640px) {
     #app { flex-direction: column; height: auto; min-height: 100vh; overflow: visible; }
-    #controls { width: 100% !important; max-width: none; border-right: 0; border-bottom: 1px solid #e0e2e6; max-height: 46vh; }
+    #controls { width: 100% !important; max-width: none; border-right: 0; border-bottom: 1px solid var(--border); max-height: 46vh; }
     #dragHandle { display: none; }
     #stage { min-height: 54vh; }
   }
@@ -412,7 +465,7 @@
 
     const guideX = Math.min(0, bbox.minX), guideY = bbox.minY;
     const fits = bbox.w <= USABLE_W && bbox.h <= USABLE_H;
-    const stroke = fits ? '#2f9e44' : '#e03131';
+    const stroke = fits ? 'var(--guide-ok)' : 'var(--guide-warn)';
 
     // viewBox must cover the union of the shape and the page-boundary guide
     // (the guide is often larger than a small design) or the guide clips
@@ -433,12 +486,12 @@
     }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet — will scale down for print'));
 
     svg.appendChild(el('line', {
-      x1: 0, y1: vy, x2: 0, y2: vy + vh, stroke: '#adb5bd', 'stroke-width': vw * 0.002,
+      x1: 0, y1: vy, x2: 0, y2: vy + vh, stroke: 'var(--centerline)', 'stroke-width': vw * 0.002,
       'stroke-dasharray': (vw * 0.01) + ' ' + (vw * 0.008)
     }));
 
     svg.appendChild(el('path', {
-      d: outline.d, fill: '#cfe8ff', stroke: '#1864ab', 'stroke-width': vw * 0.006, 'stroke-linejoin': 'round'
+      d: outline.d, fill: 'var(--shape-fill)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.006, 'stroke-linejoin': 'round'
     }));
   }
 
