@@ -72,6 +72,28 @@
   }
   #controls h1 { font-size: 17px; margin: 0 0 4px; }
   #controls .sub { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
+
+  /* ---------- tool switcher ---------- */
+  #toolHeader { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+  #hamburgerBtn {
+    flex-shrink: 0; width: 36px; height: 36px; margin-top: 1px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-alt); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  }
+  #hamburgerBtn span { display: block; width: 16px; height: 2px; background: var(--text); border-radius: 1px; }
+  #hamburgerBtn:hover, #hamburgerBtn[aria-expanded="true"] { border-color: var(--accent); }
+  #toolMenu {
+    display: flex; flex-direction: column; gap: 6px; margin: 0 0 16px;
+    padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-alt);
+  }
+  #toolMenu[hidden] { display: none; }
+  .toolMenuItem {
+    text-align: left; padding: 9px 10px; font-size: 13px; border: 1px solid transparent;
+    background: transparent; color: var(--text); border-radius: 7px; cursor: pointer;
+  }
+  .toolMenuItem:hover { background: var(--surface); }
+  .toolMenuItem.active { background: var(--accent); color: var(--accent-contrast); font-weight: 600; }
+
   .familyToggle { display: flex; gap: 6px; margin-bottom: 14px; }
   .familyToggle button {
     flex: 1; padding: 9px 6px; font-size: 13px; border: 1px solid var(--border);
@@ -187,62 +209,103 @@
 <body>
 <div id="app">
   <div id="controls">
-    <h1>Backrest Arch Designer</h1>
-    <p class="sub">Design a symmetric arched top corner, then print a true-to-scale half-pattern to trace.</p>
-
-    <div class="familyToggle">
-      <button id="familyPointedBtn" type="button">Pointed</button>
-      <button id="familyArcBtn" type="button">Arc</button>
-    </div>
-
-    <select id="presetSelect"></select>
-
-    <div class="field">
-      <label for="widthInput">Width (full) <output id="widthInputVal"></output></label>
-      <input type="range" id="widthInput" min="4" max="10" step="0.0625">
-      <div class="hint">Capped at 10" so each half (with room for foil-cusp bulge) always prints true-to-scale on one 8.5×11 sheet — never the scaled/gridded fallback.</div>
-    </div>
-
-    <div class="field" id="field-height">
-      <label for="heightInput">Height (full) <output id="heightInputVal"></output></label>
-      <input type="range" id="heightInput" min="3" max="11" step="0.0625">
-    </div>
-
-    <div id="derivedHeightNote">
-      Height is <strong>derived</strong> from width + spring angle for a true circular arc — it can't be set independently.<br>
-      Derived height: <span id="derivedHeightDisplay"></span>
-    </div>
-
-    <div class="field" id="field-springAngle">
-      <label for="springAngleInput">Spring angle <output id="springAngleInputVal"></output></label>
-      <input type="range" id="springAngleInput" min="30" max="130" step="1">
-      <div class="hint">90&deg; = semicircle &middot; &lt;90&deg; = segmental &middot; &gt;90&deg; = horseshoe / Moorish (true undercut)</div>
-    </div>
-
-    <div id="field-shapeParams">
-      <div class="field">
-        <label for="bulgeInput">Bulge <output id="bulgeInputVal"></output></label>
-        <input type="range" id="bulgeInput" min="0" max="1" step="0.01">
-      </div>
-      <div class="field">
-        <label for="pinchInput">Pinch <output id="pinchInputVal"></output></label>
-        <input type="range" id="pinchInput" min="0" max="1" step="0.01">
-      </div>
-      <div class="field">
-        <label for="bulgePosInput">Bulge position <output id="bulgePosInputVal"></output></label>
-        <input type="range" id="bulgePosInput" min="0" max="1" step="0.01">
-      </div>
-      <div class="field">
-        <label for="pinchPosInput">Pinch position <output id="pinchPosInputVal"></output></label>
-        <input type="range" id="pinchPosInput" min="0" max="1" step="0.01">
+    <div id="toolHeader">
+      <button id="hamburgerBtn" type="button" aria-label="Switch tool" aria-haspopup="true" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <div>
+        <h1 id="toolTitle">Backrest Arch Designer</h1>
+        <p class="sub" id="toolSub">Design a symmetric arched top corner, then print a true-to-scale half-pattern to trace.</p>
       </div>
     </div>
 
-    <label class="checkRow"><input type="checkbox" id="foiledCheckbox"> Add foil cusps</label>
+    <div id="toolMenu" hidden>
+      <button type="button" class="toolMenuItem" data-tool="arch">Backrest Arch Designer</button>
+      <button type="button" class="toolMenuItem" data-tool="handle">Handle Maker</button>
+    </div>
 
-    <div class="field" id="field-lobes">
-      <label for="lobesInput">Lobes <output id="lobesInputVal"></output></label>
-      <input type="range" id="lobesInput" min="3" max="11" step="2">
+    <!-- ================= Backrest Arch Designer ================= -->
+    <div id="archPanel">
+      <div class="familyToggle">
+        <button id="familyPointedBtn" type="button">Pointed</button>
+        <button id="familyArcBtn" type="button">Arc</button>
+      </div>
+
+      <select id="presetSelect"></select>
+
+      <div class="field">
+        <label for="widthInput">Width (full) <output id="widthInputVal"></output></label>
+        <input type="range" id="widthInput" min="4" max="10" step="0.0625">
+        <div class="hint">Capped at 10" so each half (with room for foil-cusp bulge) always prints true-to-scale on one 8.5×11 sheet — never the scaled/gridded fallback.</div>
+      </div>
+
+      <div class="field" id="field-height">
+        <label for="heightInput">Height (full) <output id="heightInputVal"></output></label>
+        <input type="range" id="heightInput" min="3" max="11" step="0.0625">
+      </div>
+
+      <div id="derivedHeightNote">
+        Height is <strong>derived</strong> from width + spring angle for a true circular arc — it can't be set independently.<br>
+        Derived height: <span id="derivedHeightDisplay"></span>
+      </div>
+
+      <div class="field" id="field-springAngle">
+        <label for="springAngleInput">Spring angle <output id="springAngleInputVal"></output></label>
+        <input type="range" id="springAngleInput" min="30" max="130" step="1">
+        <div class="hint">90&deg; = semicircle &middot; &lt;90&deg; = segmental &middot; &gt;90&deg; = horseshoe / Moorish (true undercut)</div>
+      </div>
+
+      <div id="field-shapeParams">
+        <div class="field">
+          <label for="bulgeInput">Bulge <output id="bulgeInputVal"></output></label>
+          <input type="range" id="bulgeInput" min="0" max="1" step="0.01">
+        </div>
+        <div class="field">
+          <label for="pinchInput">Pinch <output id="pinchInputVal"></output></label>
+          <input type="range" id="pinchInput" min="0" max="1" step="0.01">
+        </div>
+        <div class="field">
+          <label for="bulgePosInput">Bulge position <output id="bulgePosInputVal"></output></label>
+          <input type="range" id="bulgePosInput" min="0" max="1" step="0.01">
+        </div>
+        <div class="field">
+          <label for="pinchPosInput">Pinch position <output id="pinchPosInputVal"></output></label>
+          <input type="range" id="pinchPosInput" min="0" max="1" step="0.01">
+        </div>
+      </div>
+
+      <label class="checkRow"><input type="checkbox" id="foiledCheckbox"> Add foil cusps</label>
+
+      <div class="field" id="field-lobes">
+        <label for="lobesInput">Lobes <output id="lobesInputVal"></output></label>
+        <input type="range" id="lobesInput" min="3" max="11" step="2">
+      </div>
+    </div>
+
+    <!-- ================= Handle Maker ================= -->
+    <div id="handlePanel" hidden>
+      <div class="familyToggle">
+        <button id="handleFamilyCutoutBtn" type="button">Cutout Hole</button>
+        <button id="handleFamilyScoopBtn" type="button">Edge Scoop</button>
+      </div>
+
+      <select id="handlePresetSelect"></select>
+
+      <div class="field">
+        <label for="handleDim1Input"><span id="handleDim1Label">Length</span> <output id="handleDim1InputVal"></output></label>
+        <input type="range" id="handleDim1Input" min="2" max="6.5" step="0.0625">
+      </div>
+
+      <div class="field">
+        <label for="handleDim2Input"><span id="handleDim2Label">Width</span> <output id="handleDim2InputVal"></output></label>
+        <input type="range" id="handleDim2Input" min="0.75" max="3.5" step="0.0625">
+      </div>
+
+      <div class="field">
+        <label for="handlePowerInput">Roundness <output id="handlePowerInputVal"></output></label>
+        <input type="range" id="handlePowerInput" min="0.6" max="8" step="0.05">
+        <div class="hint">Lower = pointed/diamond &middot; 2 = true oval &middot; higher = flat-sided, almost rectangular</div>
+      </div>
     </div>
 
     <div class="actionRow">
@@ -265,7 +328,7 @@
   <div id="pngModalInner">
     <button id="pngModalClose" type="button">Close</button>
     <p id="pngModalHelp">
-      These are your two printable pages at 300&nbsp;dpi — one full half-pattern each. Press and hold an image to save it to your photo library.
+      These are your printable pages at 300&nbsp;dpi. Press and hold an image to save it to your photo library.
       If your browser doesn't offer a save option, take a screenshot instead — that always works.
     </p>
     <div id="pngModalPages"></div>
@@ -617,18 +680,17 @@
   }
 
   // Places the calibration ruler directly under the shape (it needs its full
-  // 6in run to work) and the descriptive labels wherever there's room —
-  // below the ruler normally, or beside the shape when a tall design leaves
-  // little room at the bottom. Positions are derived from the shape's actual
-  // printed footprint so nothing here overlaps the traced curve itself.
-  // shapeLeft/shapeRight are both needed (not just shapeRight) because the
-  // mirrored/left-half page has its free space on the opposite side.
-  function buildFooter(shapeLeft, shapeRight, shapeBottom, shape, scale, extraParagraph, pageLabel) {
+  // 6in run to work) and a paragraph block wherever there's room — below the
+  // ruler normally, or beside the shape when a tall design leaves little room
+  // at the bottom. Positions are derived from the shape's actual printed
+  // footprint so nothing here overlaps the traced curve itself. Shared by
+  // both tools; each tool builds its own paragraph text and calls this with
+  // its shape's left/right/bottom extents on the page.
+  function buildFooterLayout(shapeLeft, shapeRight, shapeBottom, paragraphs) {
     const g = el('g', {});
     const freeRightW = (PAGE_W - MARGIN) - shapeRight;
     const freeLeftW = shapeLeft - MARGIN;
     const freeBottomH = (PAGE_H - MARGIN) - shapeBottom;
-    const paragraphs = printLabelParagraphs(shape, scale, extraParagraph, pageLabel);
 
     // clamp so the ruler's own content (not just its anchor) always ends
     // before the physical page bottom -- this is what was missing before
@@ -652,6 +714,10 @@
       g.appendChild(textBlock(paragraphs, x, MARGIN + 0.05, sideW - 0.3, 0.105, 0.15));
     }
     return g;
+  }
+
+  function buildFooter(shapeLeft, shapeRight, shapeBottom, shape, scale, extraParagraph, pageLabel) {
+    return buildFooterLayout(shapeLeft, shapeRight, shapeBottom, printLabelParagraphs(shape, scale, extraParagraph, pageLabel));
   }
 
   function chooseGridSpacing(w, h) {
@@ -745,6 +811,219 @@
     buildPrintSheet(outline, shape);
   }
 
+  // =================================================================
+  // Handle Maker — a second tool sharing this page's shell (print,
+  // export, and general UI chrome) for designing hand-hold cutouts,
+  // e.g. cutting board handles. Always one 8.5x11 sheet at true 1:1
+  // scale: unlike the arch designer there's no "does it fit" branch
+  // to worry about, because the slider ranges below are kept small
+  // enough that overflowing a sheet simply isn't reachable.
+  // =================================================================
+
+  const handleState = {
+    family: 'cutout',  // 'cutout' (closed hole) | 'scoop' (edge notch)
+    dim1: 5,           // length (cutout) / width (scoop), inches
+    dim2: 1.5,         // width (cutout) / depth (scoop), inches
+    power: 2           // superellipse exponent: <2 pointed/diamond, 2 = true oval, >2 flatter/near-rectangular
+  };
+
+  const handlePresets = [
+    { family: 'cutout', name: 'Classic Oval', dim1: 5, dim2: 1.5, power: 2 },
+    { family: 'cutout', name: 'Stadium Pull', dim1: 5, dim2: 1.25, power: 6 },
+    { family: 'cutout', name: 'Rounded Square Grip', dim1: 2.5, dim2: 2.5, power: 4 },
+    { family: 'cutout', name: 'Diamond Cutout', dim1: 4.5, dim2: 1.75, power: 1.3 },
+    { family: 'scoop', name: 'Shallow Scoop', dim1: 5, dim2: 1, power: 2 },
+    { family: 'scoop', name: 'Deep Crescent', dim1: 4, dim2: 2.25, power: 2 },
+    { family: 'scoop', name: 'Flat-Bottom Notch', dim1: 5, dim2: 1.5, power: 5 },
+    { family: 'scoop', name: 'Pointed Notch', dim1: 4, dim2: 1.75, power: 1.2 }
+  ];
+
+  function handleFamilyPresets(fam) { return handlePresets.filter(function (p) { return p.family === fam; }); }
+
+  // Both families are the same Lamé curve / superellipse, |x/a|^p + |y/b|^p = 1
+  // (p=2 is a true ellipse; p<2 pulls the sides in toward a diamond; p>2
+  // pushes them out toward a flat-sided rounded rectangle) — just used two
+  // ways: the full closed loop for a cutout hole, or its half-profile as a
+  // function of x for the edge scoop's notch.
+  function buildHandleOutline() {
+    const a = handleState.dim1 / 2, b = handleState.dim2 / 2, p = handleState.power;
+    if (handleState.family === 'cutout') {
+      const n = 240;
+      const pts = [];
+      for (let i = 0; i < n; i++) {
+        const t = (i / n) * Math.PI * 2;
+        const c = Math.cos(t), s = Math.sin(t);
+        const x = a * Math.sign(c) * Math.pow(Math.abs(c), 2 / p);
+        const y = b * Math.sign(s) * Math.pow(Math.abs(s), 2 / p);
+        pts.push({ x: x, y: y });
+      }
+      let d = 'M ' + pts[0].x.toFixed(4) + ' ' + pts[0].y.toFixed(4);
+      for (let i = 1; i < pts.length; i++) d += ' L ' + pts[i].x.toFixed(4) + ' ' + pts[i].y.toFixed(4);
+      d += ' Z';
+      return { family: 'cutout', d: d, pts: pts, a: a, b: b };
+    }
+
+    // edge scoop: right-half profile y(x) for x in [0, a] -- depth b at the
+    // center (x=0), tapering to meet the edge line (y=0) at x=a
+    const n = 150;
+    const rightPts = [];
+    for (let i = 0; i <= n; i++) {
+      const x = (i / n) * a;
+      const y = b * Math.pow(1 - Math.pow(x / a, p), 1 / p);
+      rightPts.push({ x: x, y: y });
+    }
+    const leftPts = rightPts.slice().reverse().map(function (pt) { return { x: -pt.x, y: pt.y }; });
+    const pts = leftPts.concat(rightPts.slice(1));
+    let d = 'M ' + pts[0].x.toFixed(4) + ' ' + pts[0].y.toFixed(4);
+    for (let i = 1; i < pts.length; i++) d += ' L ' + pts[i].x.toFixed(4) + ' ' + pts[i].y.toFixed(4);
+    return { family: 'scoop', d: d, pts: pts, a: a, b: b };
+  }
+
+  function drawHandlePreview(outline) {
+    const svg = document.getElementById('previewSvg');
+    svg.innerHTML = '';
+    const bbox = computeBBox(outline.pts);
+    const fits = (bbox.maxX - bbox.minX) <= USABLE_W && (bbox.maxY - bbox.minY) <= USABLE_H;
+    const stroke = fits ? 'var(--guide-ok)' : 'var(--guide-warn)';
+
+    const guideX = (bbox.minX + bbox.maxX) / 2 - USABLE_W / 2, guideY = bbox.minY;
+    const unionMinX = Math.min(bbox.minX, guideX), unionMaxX = Math.max(bbox.maxX, guideX + USABLE_W);
+    const unionMinY = Math.min(bbox.minY, guideY), unionMaxY = Math.max(bbox.maxY, guideY + USABLE_H);
+    const unionW = unionMaxX - unionMinX, unionH = unionMaxY - unionMinY;
+    const pad = Math.max(unionW, unionH) * 0.06 + 0.25;
+    const vx = unionMinX - pad, vy = unionMinY - pad, vw = unionW + pad * 2, vh = unionH + pad * 2;
+    svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
+
+    svg.appendChild(el('rect', {
+      x: guideX, y: guideY, width: USABLE_W, height: USABLE_H,
+      fill: 'none', stroke: stroke, 'stroke-width': vw * 0.004,
+      'stroke-dasharray': (vw * 0.012) + ' ' + (vw * 0.008)
+    }));
+    svg.appendChild(textEl({
+      x: guideX + 0.1, y: guideY - pad * 0.25, 'font-size': Math.max(vw, vh) * 0.032, fill: stroke, 'font-family': 'sans-serif'
+    }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet'));
+
+    const refAttrs = { stroke: 'var(--centerline)', 'stroke-width': vw * 0.002, 'stroke-dasharray': (vw * 0.01) + ' ' + (vw * 0.008) };
+    if (outline.family === 'cutout') {
+      svg.appendChild(el('line', Object.assign({ x1: bbox.minX - 0.1, y1: 0, x2: bbox.maxX + 0.1, y2: 0 }, refAttrs)));
+      svg.appendChild(el('line', Object.assign({ x1: 0, y1: bbox.minY - 0.1, x2: 0, y2: bbox.maxY + 0.1 }, refAttrs)));
+    } else {
+      svg.appendChild(el('line', Object.assign({ x1: -outline.a - 0.1, y1: 0, x2: outline.a + 0.1, y2: 0 }, refAttrs)));
+    }
+
+    svg.appendChild(el('path', {
+      d: outline.d, fill: 'var(--shape-fill)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.006, 'stroke-linejoin': 'round'
+    }));
+  }
+
+  function updateHandleDims() {
+    const dims = document.getElementById('dims');
+    const hs = handleState;
+    const label1 = hs.family === 'cutout' ? 'Length' : 'Width';
+    const label2 = hs.family === 'cutout' ? 'Width' : 'Depth';
+    dims.innerHTML = label1 + ': ' + hs.dim1.toFixed(3) + '" (' + toFraction16(hs.dim1) + ') &nbsp;&middot;&nbsp; ' +
+      label2 + ': ' + hs.dim2.toFixed(3) + '" (' + toFraction16(hs.dim2) + ')';
+  }
+
+  function handleLabelParagraphs() {
+    const hs = handleState;
+    const paras = [];
+    if (hs.family === 'cutout') {
+      paras.push('Handle Maker — Cutout Hole');
+      paras.push('Length: ' + hs.dim1.toFixed(3) + '" (' + toFraction16(hs.dim1) + ')   Width: ' + hs.dim2.toFixed(3) + '" (' + toFraction16(hs.dim2) + ')');
+      paras.push('SOLID line = cut line — rout or drill out the full closed loop.');
+      paras.push('Dashed cross = centerlines, for positioning the template on your stock.');
+    } else {
+      paras.push('Handle Maker — Edge Scoop');
+      paras.push('Width: ' + hs.dim1.toFixed(3) + '" (' + toFraction16(hs.dim1) + ')   Depth: ' + hs.dim2.toFixed(3) + '" (' + toFraction16(hs.dim2) + ')');
+      paras.push('SOLID line = cut line     DASHED line = your material’s edge (reference only, not cut)');
+      paras.push('Align the dashed line with the true edge of your stock, then trace and cut the solid curve.');
+    }
+    paras.push('Printed at true 1:1 scale.');
+    return paras;
+  }
+
+  function buildHandlePrintSheet() {
+    const printSheetEl = document.getElementById('printSheet');
+    printSheetEl.innerHTML = '';
+    const outline = buildHandleOutline();
+    const bbox = computeBBox(outline.pts);
+
+    const svg = svgPage();
+    const originX = PAGE_W / 2 - (bbox.minX + bbox.maxX) / 2;
+    const originY = MARGIN + 0.35 - bbox.minY;
+    const g = el('g', { transform: 'translate(' + originX + ' ' + originY + ')' });
+    g.appendChild(el('path', { d: outline.d, fill: 'none', stroke: '#000', 'stroke-width': 0.02 }));
+    if (outline.family === 'cutout') {
+      g.appendChild(el('line', { x1: bbox.minX - 0.15, y1: 0, x2: bbox.maxX + 0.15, y2: 0, stroke: '#000', 'stroke-width': 0.012, 'stroke-dasharray': '0.06 0.05' }));
+      g.appendChild(el('line', { x1: 0, y1: bbox.minY - 0.15, x2: 0, y2: bbox.maxY + 0.15, stroke: '#000', 'stroke-width': 0.012, 'stroke-dasharray': '0.06 0.05' }));
+    } else {
+      g.appendChild(el('line', { x1: -outline.a - 0.15, y1: 0, x2: outline.a + 0.15, y2: 0, stroke: '#000', 'stroke-width': 0.015, 'stroke-dasharray': '0.08 0.06' }));
+    }
+    svg.appendChild(g);
+
+    const shapeLeft = originX + bbox.minX, shapeRight = originX + bbox.maxX, shapeBottom = originY + bbox.maxY;
+    svg.appendChild(buildFooterLayout(shapeLeft, shapeRight, shapeBottom, handleLabelParagraphs()));
+    printSheetEl.appendChild(wrapPrintPage(svg));
+  }
+
+  function renderHandle() {
+    const outline = buildHandleOutline();
+    drawHandlePreview(outline);
+    updateHandleDims();
+    buildHandlePrintSheet();
+  }
+
+  function handleFormatValue(key, val) {
+    return key === 'power' ? val.toFixed(2) : (val.toFixed(3) + '" (' + toFraction16(val) + ')');
+  }
+
+  function updateHandleFieldLabels() {
+    const cutout = handleState.family === 'cutout';
+    document.getElementById('handleDim1Label').textContent = cutout ? 'Length' : 'Width';
+    document.getElementById('handleDim2Label').textContent = cutout ? 'Width' : 'Depth';
+    document.getElementById('handleFamilyCutoutBtn').classList.toggle('active', cutout);
+    document.getElementById('handleFamilyScoopBtn').classList.toggle('active', !cutout);
+  }
+
+  function syncHandleControlsFromState() {
+    document.getElementById('handleDim1Input').value = handleState.dim1;
+    document.getElementById('handleDim1InputVal').textContent = handleFormatValue('dim1', handleState.dim1);
+    document.getElementById('handleDim2Input').value = handleState.dim2;
+    document.getElementById('handleDim2InputVal').textContent = handleFormatValue('dim2', handleState.dim2);
+    document.getElementById('handlePowerInput').value = handleState.power;
+    document.getElementById('handlePowerInputVal').textContent = handleFormatValue('power', handleState.power);
+    updateHandleFieldLabels();
+  }
+
+  function populateHandlePresetSelect() {
+    const sel = document.getElementById('handlePresetSelect');
+    sel.innerHTML = '';
+    handleFamilyPresets(handleState.family).forEach(function (p, i) {
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  function applyHandlePreset(p) {
+    handleState.family = p.family;
+    handleState.dim1 = p.dim1;
+    handleState.dim2 = p.dim2;
+    handleState.power = p.power;
+    syncHandleControlsFromState();
+    const idx = handleFamilyPresets(handleState.family).indexOf(p);
+    if (idx >= 0) document.getElementById('handlePresetSelect').value = idx;
+    renderHandle();
+  }
+
+  function switchHandleFamily(fam) {
+    if (handleState.family === fam) return;
+    handleState.family = fam;
+    populateHandlePresetSelect();
+    applyHandlePreset(handleFamilyPresets(fam)[0]);
+  }
+
   // ---------------------------------------------------------------
   // export (PNG) — see file header notes: the reliable path across
   // sandboxed webviews is rendering the PNG as an in-page <img>, not
@@ -782,7 +1061,9 @@
   function showPngModal(blobs) {
     const container = document.getElementById('pngModalPages');
     container.innerHTML = '';
-    const labels = ['Page 1 — right half', 'Page 2 — left half (mirrored)'];
+    const isArch = appMode === 'arch';
+    const labels = isArch ? ['Page 1 — right half', 'Page 2 — left half (mirrored)'] : ['Handle template'];
+    const filePrefix = isArch ? 'backrest-arch-pattern-page' : 'handle-template-page';
     blobs.forEach(function (blob, i) {
       const url = URL.createObjectURL(blob);
       const wrap = document.createElement('div');
@@ -794,7 +1075,7 @@
       img.alt = h3.textContent;
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'backrest-arch-pattern-page' + (i + 1) + '.png';
+      a.download = filePrefix + (i + 1) + '.png';
       a.textContent = 'Download PNG';
       wrap.appendChild(h3);
       wrap.appendChild(img);
@@ -911,6 +1192,57 @@
     });
   }
 
+  function bindHandleRange(id, key, parser) {
+    document.getElementById(id).addEventListener('input', function (e) {
+      handleState[key] = parser(e.target.value);
+      document.getElementById(id + 'Val').textContent = handleFormatValue(key, handleState[key]);
+      renderHandle();
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // tool switcher (hamburger menu) -- both tools share the preview
+  // canvas, print sheet, and export/print buttons, so only one tool's
+  // render pipeline should ever run at a time
+  // ---------------------------------------------------------------
+
+  let appMode = 'arch'; // 'arch' | 'handle'
+
+  function renderCurrent() {
+    if (appMode === 'handle') renderHandle(); else render();
+  }
+
+  function closeToolMenu() {
+    document.getElementById('toolMenu').hidden = true;
+    document.getElementById('hamburgerBtn').setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleToolMenu() {
+    const menu = document.getElementById('toolMenu');
+    const willShow = menu.hidden;
+    menu.hidden = !willShow;
+    document.getElementById('hamburgerBtn').setAttribute('aria-expanded', String(willShow));
+  }
+
+  function switchAppMode(mode) {
+    if (mode !== appMode) {
+      appMode = mode;
+      const isArch = mode === 'arch';
+      document.getElementById('archPanel').hidden = !isArch;
+      document.getElementById('handlePanel').hidden = isArch;
+      document.getElementById('toolTitle').textContent = isArch ? 'Backrest Arch Designer' : 'Handle Maker';
+      document.getElementById('toolSub').textContent = isArch
+        ? 'Design a symmetric arched top corner, then print a true-to-scale half-pattern to trace.'
+        : 'Design a hand-hold cutout for cutting boards and similar projects, then print a true-to-scale template.';
+      document.title = isArch ? 'Backrest Arch Designer' : 'Handle Maker';
+      document.querySelectorAll('.toolMenuItem').forEach(function (btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-tool') === mode);
+      });
+      renderCurrent();
+    }
+    closeToolMenu();
+  }
+
   function initDragHandle() {
     const handle = document.getElementById('dragHandle');
     const controls = document.getElementById('controls');
@@ -968,8 +1300,44 @@
       document.getElementById('pngModal').style.display = 'none';
     });
 
+    // --- Handle Maker wiring ---
+    document.getElementById('handleFamilyCutoutBtn').addEventListener('click', function () { switchHandleFamily('cutout'); });
+    document.getElementById('handleFamilyScoopBtn').addEventListener('click', function () { switchHandleFamily('scoop'); });
+    document.getElementById('handlePresetSelect').addEventListener('change', function (e) {
+      const p = handleFamilyPresets(handleState.family)[parseInt(e.target.value, 10)];
+      if (p) applyHandlePreset(p);
+    });
+    bindHandleRange('handleDim1Input', 'dim1', parseFloat);
+    bindHandleRange('handleDim2Input', 'dim2', parseFloat);
+    bindHandleRange('handlePowerInput', 'power', parseFloat);
+
+    // pre-sync the handle maker's controls to its default preset without
+    // rendering into the shared canvas -- that only happens once the tool
+    // is actually switched to, via switchAppMode -> renderCurrent
+    handleState.family = handlePresets[0].family;
+    handleState.dim1 = handlePresets[0].dim1;
+    handleState.dim2 = handlePresets[0].dim2;
+    handleState.power = handlePresets[0].power;
+    populateHandlePresetSelect();
+    syncHandleControlsFromState();
+    document.getElementById('handlePresetSelect').value = 0;
+
+    // --- tool switcher wiring ---
+    document.getElementById('hamburgerBtn').addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleToolMenu();
+    });
+    document.querySelectorAll('.toolMenuItem').forEach(function (btn) {
+      btn.addEventListener('click', function () { switchAppMode(btn.getAttribute('data-tool')); });
+    });
+    document.addEventListener('click', function (e) {
+      const menu = document.getElementById('toolMenu');
+      if (!menu.hidden && !menu.contains(e.target) && e.target.id !== 'hamburgerBtn') closeToolMenu();
+    });
+    document.querySelector('.toolMenuItem[data-tool="arch"]').classList.add('active');
+
     initDragHandle();
-    window.addEventListener('resize', render);
+    window.addEventListener('resize', renderCurrent);
 
     populatePresetSelect();
     applyPreset(familyPresets('pointed')[2]); // Gothic Arch
