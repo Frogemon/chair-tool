@@ -94,11 +94,12 @@
   .toolMenuItem:hover { background: var(--surface); }
   .toolMenuItem.active { background: var(--accent); color: var(--accent-contrast); font-weight: 600; }
 
-  .familyToggle { display: flex; gap: 6px; margin-bottom: 14px; }
+  .familyToggle { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
   .familyToggle button {
     flex: 1; padding: 9px 6px; font-size: 13px; border: 1px solid var(--border);
     background: var(--surface-alt); color: var(--text); border-radius: 8px; cursor: pointer;
   }
+  .familyToggle.wrap button { flex: 1 1 45%; }
   .familyToggle button.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 
   fieldset { border: 0; padding: 0; margin: 0 0 14px; }
@@ -284,27 +285,71 @@
 
     <!-- ================= Handle Maker ================= -->
     <div id="handlePanel" hidden>
-      <div class="familyToggle">
-        <button id="handleFamilyCutoutBtn" type="button">Cutout Hole</button>
-        <button id="handleFamilyScoopBtn" type="button">Edge Scoop</button>
+      <div class="familyToggle wrap">
+        <button id="handleFamilyRoundedBtn" type="button">Rounded</button>
+        <button id="handleFamilyPointedBtn" type="button">Pointed</button>
+        <button id="handleFamilyCleaverBtn" type="button">Cleaver Notch</button>
+        <button id="handleFamilySwirlBtn" type="button">Swirl</button>
       </div>
 
       <select id="handlePresetSelect"></select>
 
       <div class="field">
-        <label for="handleDim1Input"><span id="handleDim1Label">Length</span> <output id="handleDim1InputVal"></output></label>
-        <input type="range" id="handleDim1Input" min="2" max="6.5" step="0.0625">
+        <label for="hBoardWidthInput">Board width (at shoulder) <output id="hBoardWidthInputVal"></output></label>
+        <input type="range" id="hBoardWidthInput" min="3" max="8" step="0.0625">
+      </div>
+      <div class="field">
+        <label for="hGripWidthInput">Grip width <output id="hGripWidthInputVal"></output></label>
+        <input type="range" id="hGripWidthInput" min="0.75" max="3" step="0.0625">
+      </div>
+      <div class="field">
+        <label for="hNeckLengthInput">Neck length <output id="hNeckLengthInputVal"></output></label>
+        <input type="range" id="hNeckLengthInput" min="0.5" max="2.5" step="0.0625">
+      </div>
+      <div class="field">
+        <label for="hGripLengthInput">Grip length <output id="hGripLengthInputVal"></output></label>
+        <input type="range" id="hGripLengthInput" min="1" max="4" step="0.0625">
+      </div>
+      <div class="field">
+        <label for="hNeckCurveInput">Neck curve <output id="hNeckCurveInputVal"></output></label>
+        <input type="range" id="hNeckCurveInput" min="0" max="1" step="0.01">
+        <div class="hint">0 = straight taper &middot; 1 = deeply waisted/scooped</div>
       </div>
 
-      <div class="field">
-        <label for="handleDim2Input"><span id="handleDim2Label">Width</span> <output id="handleDim2InputVal"></output></label>
-        <input type="range" id="handleDim2Input" min="0.75" max="3.5" step="0.0625">
+      <div class="field" id="hField-capDepth">
+        <label for="hCapDepthInput">Cap length <output id="hCapDepthInputVal"></output></label>
+        <input type="range" id="hCapDepthInput" min="0.5" max="2.5" step="0.0625">
       </div>
 
-      <div class="field">
-        <label for="handlePowerInput">Roundness <output id="handlePowerInputVal"></output></label>
-        <input type="range" id="handlePowerInput" min="0.6" max="8" step="0.05">
-        <div class="hint">Lower = pointed/diamond &middot; 2 = true oval &middot; higher = flat-sided, almost rectangular</div>
+      <label class="checkRow" id="hField-hasHole"><input type="checkbox" id="hHasHoleCheckbox"> Add hanging hole</label>
+      <div class="field" id="hField-holeDiameter">
+        <label for="hHoleDiameterInput">Hole diameter <output id="hHoleDiameterInputVal"></output></label>
+        <input type="range" id="hHoleDiameterInput" min="0.25" max="0.75" step="0.0625">
+      </div>
+
+      <div class="field" id="hField-pointCurve">
+        <label for="hPointCurveInput">Point curve <output id="hPointCurveInputVal"></output></label>
+        <input type="range" id="hPointCurveInput" min="0" max="1" step="0.01">
+        <div class="hint">0 = straight taper to a point &middot; 1 = elegant concave lancet point</div>
+      </div>
+
+      <div class="field" id="hField-notchWidth">
+        <label for="hNotchWidthInput">Notch width <output id="hNotchWidthInputVal"></output></label>
+        <input type="range" id="hNotchWidthInput" min="0.5" max="2.5" step="0.0625">
+      </div>
+      <div class="field" id="hField-notchDepth">
+        <label for="hNotchDepthInput">Notch depth <output id="hNotchDepthInputVal"></output></label>
+        <input type="range" id="hNotchDepthInput" min="0.2" max="1.5" step="0.0625">
+      </div>
+
+      <div class="field" id="hField-curlTurns">
+        <label for="hCurlTurnsInput">Curl turns <output id="hCurlTurnsInputVal"></output></label>
+        <input type="range" id="hCurlTurnsInput" min="0.5" max="2" step="0.05">
+      </div>
+      <div class="field" id="hField-curlTightness">
+        <label for="hCurlTightnessInput">Curl tightness <output id="hCurlTightnessInputVal"></output></label>
+        <input type="range" id="hCurlTightnessInput" min="0.1" max="0.5" step="0.0125">
+        <div class="hint">Smaller = a tighter fiddlehead curl at the core</div>
       </div>
     </div>
 
@@ -813,80 +858,199 @@
 
   // =================================================================
   // Handle Maker — a second tool sharing this page's shell (print,
-  // export, and general UI chrome) for designing hand-hold cutouts,
-  // e.g. cutting board handles. Always one 8.5x11 sheet at true 1:1
-  // scale: unlike the arch designer there's no "does it fit" branch
-  // to worry about, because the slider ranges below are kept small
-  // enough that overflowing a sheet simply isn't reachable.
+  // export, and general UI chrome) for designing the actual silhouette
+  // of a cutting-board handle: a neck necking down from the board's
+  // width to a narrower grip, ending in one of four end-cap styles.
+  // Same half-design-then-mirror approach as the arch designer (y-down,
+  // symmetric about x=0), just with the roles flipped: here the
+  // "shoulder" (full board width) sits at y=0 and the design extends
+  // outward (increasing y) toward the handle's tip.
+  //
+  // Always one 8.5x11 sheet: the slider ranges are kept small enough
+  // that the design normally can't exceed the printable area, but
+  // unlike the arch designer's hard "one page, guaranteed" bound, the
+  // swirl family's curl geometry isn't simple to bound analytically —
+  // so buildHandlePrintSheet has a small safety-net scale-down for the
+  // rare pathological case, rather than nothing at all.
   // =================================================================
 
   const handleState = {
-    family: 'cutout',  // 'cutout' (closed hole) | 'scoop' (edge notch)
-    dim1: 5,           // length (cutout) / width (scoop), inches
-    dim2: 1.5,         // width (cutout) / depth (scoop), inches
-    power: 2           // superellipse exponent: <2 pointed/diamond, 2 = true oval, >2 flatter/near-rectangular
+    family: 'rounded', // 'rounded' | 'pointed' | 'cleaver' | 'swirl'
+    boardWidth: 5,
+    gripWidth: 1.5,
+    neckLength: 1.25,
+    gripLength: 2.5,
+    neckCurve: 0.5,
+    capDepth: 1.5,      // rounded, pointed, cleaver (flat cap height)
+    pointCurve: 0.35,   // pointed only
+    notchWidth: 1.1,    // cleaver only
+    notchDepth: 0.55,   // cleaver only
+    curlTurns: 1.1,     // swirl only
+    curlTightness: 0.28, // swirl only (min radius at the core, inches)
+    hasHole: true,
+    holeDiameter: 0.375
   };
 
   const handlePresets = [
-    { family: 'cutout', name: 'Classic Oval', dim1: 5, dim2: 1.5, power: 2 },
-    { family: 'cutout', name: 'Stadium Pull', dim1: 5, dim2: 1.25, power: 6 },
-    { family: 'cutout', name: 'Rounded Square Grip', dim1: 2.5, dim2: 2.5, power: 4 },
-    { family: 'cutout', name: 'Diamond Cutout', dim1: 4.5, dim2: 1.75, power: 1.3 },
-    { family: 'scoop', name: 'Shallow Scoop', dim1: 5, dim2: 1, power: 2 },
-    { family: 'scoop', name: 'Deep Crescent', dim1: 4, dim2: 2.25, power: 2 },
-    { family: 'scoop', name: 'Flat-Bottom Notch', dim1: 5, dim2: 1.5, power: 5 },
-    { family: 'scoop', name: 'Pointed Notch', dim1: 4, dim2: 1.75, power: 1.2 }
+    { family: 'rounded', name: 'Classic Rounded', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 2.5, neckCurve: 0.5, capDepth: 1.4, hasHole: true, holeDiameter: 0.375 },
+    { family: 'rounded', name: 'Wide Paddle', boardWidth: 6.5, gripWidth: 2.25, neckLength: 1, gripLength: 2, neckCurve: 0.3, capDepth: 1.8, hasHole: true, holeDiameter: 0.5 },
+    { family: 'rounded', name: 'Slim Rounded', boardWidth: 4, gripWidth: 1.1, neckLength: 1.5, gripLength: 3, neckCurve: 0.7, capDepth: 1.1, hasHole: true, holeDiameter: 0.3125 },
+    { family: 'pointed', name: 'Tapered Point', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 2.5, neckCurve: 0.5, capDepth: 1.6, pointCurve: 0.3 },
+    { family: 'pointed', name: 'Lancet Point', boardWidth: 5, gripWidth: 1.25, neckLength: 1.25, gripLength: 2.75, neckCurve: 0.6, capDepth: 2, pointCurve: 0.75 },
+    { family: 'cleaver', name: 'Cleaver Notch', boardWidth: 6, gripWidth: 2, neckLength: 0.75, gripLength: 1.75, neckCurve: 0.2, capDepth: 1, notchWidth: 1.1, notchDepth: 0.5 },
+    { family: 'cleaver', name: 'Deep Thumb Notch', boardWidth: 5.5, gripWidth: 1.75, neckLength: 1, gripLength: 2, neckCurve: 0.3, capDepth: 1.2, notchWidth: 1.3, notchDepth: 0.8 },
+    { family: 'swirl', name: 'Heart Scroll', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 2, neckCurve: 0.5, curlTurns: 1, curlTightness: 0.3 },
+    { family: 'swirl', name: 'Tight Fiddlehead', boardWidth: 4.5, gripWidth: 1.25, neckLength: 1.25, gripLength: 1.75, neckCurve: 0.4, curlTurns: 1.6, curlTightness: 0.18 }
   ];
 
   function handleFamilyPresets(fam) { return handlePresets.filter(function (p) { return p.family === fam; }); }
 
-  // Both families are the same Lamé curve / superellipse, |x/a|^p + |y/b|^p = 1
-  // (p=2 is a true ellipse; p<2 pulls the sides in toward a diamond; p>2
-  // pushes them out toward a flat-sided rounded rectangle) — just used two
-  // ways: the full closed loop for a cutout hole, or its half-profile as a
-  // function of x for the edge scoop's notch.
-  function buildHandleOutline() {
-    const a = handleState.dim1 / 2, b = handleState.dim2 / 2, p = handleState.power;
-    if (handleState.family === 'cutout') {
-      const n = 240;
-      const pts = [];
-      for (let i = 0; i < n; i++) {
-        const t = (i / n) * Math.PI * 2;
-        const c = Math.cos(t), s = Math.sin(t);
-        const x = a * Math.sign(c) * Math.pow(Math.abs(c), 2 / p);
-        const y = b * Math.sign(s) * Math.pow(Math.abs(s), 2 / p);
-        pts.push({ x: x, y: y });
-      }
-      let d = 'M ' + pts[0].x.toFixed(4) + ' ' + pts[0].y.toFixed(4);
-      for (let i = 1; i < pts.length; i++) d += ' L ' + pts[i].x.toFixed(4) + ' ' + pts[i].y.toFixed(4);
-      d += ' Z';
-      return { family: 'cutout', d: d, pts: pts, a: a, b: b };
+  // Neck: a quadratic bezier from the grip's top (Wg/2, Ln) down to the
+  // shoulder (W/2, 0), pulled inward at the midpoint for a "waisted" curve.
+  function buildNeckPoints(hs) {
+    const n = 40;
+    const P0 = { x: hs.gripWidth / 2, y: hs.neckLength };
+    const P2 = { x: hs.boardWidth / 2, y: 0 };
+    const Pc = { x: (P0.x + P2.x) / 2 - hs.neckCurve * (P2.x - P0.x) * 0.5, y: (P0.y + P2.y) / 2 };
+    const pts = [];
+    for (let i = 1; i <= n; i++) {
+      const t = i / n, mt = 1 - t;
+      pts.push({ x: mt * mt * P0.x + 2 * mt * t * Pc.x + t * t * P2.x, y: mt * mt * P0.y + 2 * mt * t * Pc.y + t * t * P2.y });
+    }
+    return pts; // ends at the shoulder
+  }
+
+  // Rounded cap: a quarter-ellipse dome from the tip (0, gripTop.y+capDepth)
+  // down to the grip's top-right corner.
+  function buildRoundedCap(hs, gripTop) {
+    const n = 60, a = hs.gripWidth / 2, capDepth = hs.capDepth;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      pts.push({ x: t * a, y: gripTop.y + capDepth * Math.sqrt(Math.max(0, 1 - t * t)) });
+    }
+    return pts;
+  }
+
+  // Pointed cap: a quadratic bezier taper from the tip to the grip's
+  // corner; pointCurve pulls the control point inward for a more concave,
+  // elegant lancet-style point instead of a plain straight taper.
+  function buildPointedCap(hs, gripTop) {
+    const n = 50, a = hs.gripWidth / 2, capDepth = hs.capDepth;
+    const P0 = { x: 0, y: gripTop.y + capDepth };
+    const P2 = gripTop;
+    const Pc = { x: a * (1 - hs.pointCurve), y: gripTop.y + capDepth * 0.5 };
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / n, mt = 1 - t;
+      pts.push({ x: mt * mt * P0.x + 2 * mt * t * Pc.x + t * t * P2.x, y: mt * mt * P0.y + 2 * mt * t * Pc.y + t * t * P2.y });
+    }
+    return pts;
+  }
+
+  // Cleaver notch: a mostly flat cap, with a concave thumb-notch scooped
+  // out of its center down to the tip point.
+  function buildCleaverCap(hs, gripTop) {
+    const capDepth = hs.capDepth;
+    const notchDepth = Math.min(hs.notchDepth, capDepth * 0.92);
+    const notchHalfW = Math.min(hs.notchWidth / 2, hs.gripWidth / 2 * 0.92);
+    const flatY = gripTop.y + capDepth;
+    const n = 40;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      pts.push({ x: t * notchHalfW, y: flatY - notchDepth * Math.sqrt(Math.max(0, 1 - t * t)) });
+    }
+    pts.push({ x: notchHalfW, y: flatY });
+    pts.push({ x: hs.gripWidth / 2, y: flatY });
+    return pts; // caller appends gripTop next, drawing the flat cap's short drop back down to the grip
+  }
+
+  // Swirl/scroll: a curvature-integrated Euler-spiral curl (heading turns
+  // at a rate of 1/R(t), R shrinking from R0 to the core radius), swept as
+  // a tapering ribbon so its outer and inner edges are offset curves of
+  // the same spine. The right half's inner edge starts exactly on the
+  // centerline (0, gripTop.y) and the outer edge starts exactly at the
+  // grip's corner, so mirroring produces a symmetric double-scroll/heart
+  // shape meeting cleanly at the center, same as the other three families.
+  function buildSwirlCap(hs, gripTop) {
+    const halfWidth0 = hs.gripWidth / 4;
+    const R0 = Math.max(hs.gripWidth * 0.9, 0.6);
+    const Rmin = Math.max(hs.curlTightness, 0.08);
+    const totalTurn = hs.curlTurns * Math.PI * 2;
+    const ds = 0.025;
+
+    const spine = [];
+    let x = hs.gripWidth / 4, y = gripTop.y, heading = 0, turned = 0;
+    spine.push({ x: x, y: y, heading: heading, hw: halfWidth0 });
+    while (turned < totalTurn) {
+      const t = turned / totalTurn;
+      const R = R0 + (Rmin - R0) * t;
+      const dHeading = ds / R;
+      heading += dHeading;
+      turned += dHeading;
+      x += -Math.sin(heading) * ds;
+      y += -Math.cos(heading) * ds;
+      let hw = halfWidth0 * (1 - 0.85 * t);
+      hw = Math.min(hw, R * 0.7);
+      hw = Math.max(hw, 0.025);
+      spine.push({ x: x, y: y, heading: heading, hw: hw });
     }
 
-    // edge scoop: right-half profile y(x) for x in [0, a] -- depth b at the
-    // center (x=0), tapering to meet the edge line (y=0) at x=a
-    const n = 150;
-    const rightPts = [];
-    for (let i = 0; i <= n; i++) {
-      const x = (i / n) * a;
-      const y = b * Math.pow(1 - Math.pow(x / a, p), 1 / p);
-      rightPts.push({ x: x, y: y });
+    const outer = spine.map(function (p) {
+      const nx = Math.cos(p.heading), ny = -Math.sin(p.heading);
+      return { x: p.x + nx * p.hw, y: p.y + ny * p.hw };
+    });
+    const inner = spine.map(function (p) {
+      const nx = Math.cos(p.heading), ny = -Math.sin(p.heading);
+      return { x: p.x - nx * p.hw, y: p.y - ny * p.hw };
+    });
+
+    const pts = inner.slice();
+    const pA = inner[inner.length - 1], pB = outer[outer.length - 1], capSteps = 8;
+    for (let k = 1; k < capSteps; k++) {
+      const t = k / capSteps;
+      pts.push({ x: pA.x + (pB.x - pA.x) * t, y: pA.y + (pB.y - pA.y) * t });
     }
-    const leftPts = rightPts.slice().reverse().map(function (pt) { return { x: -pt.x, y: pt.y }; });
-    const pts = leftPts.concat(rightPts.slice(1));
+    for (let i = outer.length - 1; i >= 1; i--) pts.push(outer[i]);
+    return pts; // starts at (0, gripTop.y), ends just before gripTop
+  }
+
+  function buildHandleOutline() {
+    const hs = handleState;
+    const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
+    const gripBottom = { x: hs.gripWidth / 2, y: hs.neckLength };
+
+    let capPts;
+    if (hs.family === 'rounded') capPts = buildRoundedCap(hs, gripTop);
+    else if (hs.family === 'pointed') capPts = buildPointedCap(hs, gripTop);
+    else if (hs.family === 'cleaver') capPts = buildCleaverCap(hs, gripTop);
+    else capPts = buildSwirlCap(hs, gripTop);
+
+    const rightPts = capPts.concat([gripTop, gripBottom]).concat(buildNeckPoints(hs));
+    const outline = buildOutline(rightPts); // reuse the arch designer's generic mirror + close
+
+    let hole = null;
+    if (hs.family === 'rounded' && hs.hasHole) {
+      hole = { cx: 0, cy: gripTop.y + hs.capDepth * 0.55, r: hs.holeDiameter / 2 };
+    }
+    return { d: outline.d, allPts: outline.allPts, hole: hole };
+  }
+
+  function pointsToOpenPath(pts) {
     let d = 'M ' + pts[0].x.toFixed(4) + ' ' + pts[0].y.toFixed(4);
     for (let i = 1; i < pts.length; i++) d += ' L ' + pts[i].x.toFixed(4) + ' ' + pts[i].y.toFixed(4);
-    return { family: 'scoop', d: d, pts: pts, a: a, b: b };
+    return d;
   }
 
   function drawHandlePreview(outline) {
     const svg = document.getElementById('previewSvg');
     svg.innerHTML = '';
-    const bbox = computeBBox(outline.pts);
+    const bbox = computeBBox(outline.allPts);
     const fits = (bbox.maxX - bbox.minX) <= USABLE_W && (bbox.maxY - bbox.minY) <= USABLE_H;
     const stroke = fits ? 'var(--guide-ok)' : 'var(--guide-warn)';
 
-    const guideX = (bbox.minX + bbox.maxX) / 2 - USABLE_W / 2, guideY = bbox.minY;
+    const guideX = (bbox.minX + bbox.maxX) / 2 - USABLE_W / 2, guideY = Math.min(0, bbox.minY);
     const unionMinX = Math.min(bbox.minX, guideX), unionMaxX = Math.max(bbox.maxX, guideX + USABLE_W);
     const unionMinY = Math.min(bbox.minY, guideY), unionMaxY = Math.max(bbox.maxY, guideY + USABLE_H);
     const unionW = unionMaxX - unionMinX, unionH = unionMaxY - unionMinY;
@@ -901,45 +1065,42 @@
     }));
     svg.appendChild(textEl({
       x: guideX + 0.1, y: guideY - pad * 0.25, 'font-size': Math.max(vw, vh) * 0.032, fill: stroke, 'font-family': 'sans-serif'
-    }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet'));
+    }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet — will scale down for print'));
 
-    const refAttrs = { stroke: 'var(--centerline)', 'stroke-width': vw * 0.002, 'stroke-dasharray': (vw * 0.01) + ' ' + (vw * 0.008) };
-    if (outline.family === 'cutout') {
-      svg.appendChild(el('line', Object.assign({ x1: bbox.minX - 0.1, y1: 0, x2: bbox.maxX + 0.1, y2: 0 }, refAttrs)));
-      svg.appendChild(el('line', Object.assign({ x1: 0, y1: bbox.minY - 0.1, x2: 0, y2: bbox.maxY + 0.1 }, refAttrs)));
-    } else {
-      svg.appendChild(el('line', Object.assign({ x1: -outline.a - 0.1, y1: 0, x2: outline.a + 0.1, y2: 0 }, refAttrs)));
-    }
+    const w2 = handleState.boardWidth / 2;
+    svg.appendChild(el('line', {
+      x1: -w2 - 0.1, y1: 0, x2: w2 + 0.1, y2: 0, stroke: 'var(--centerline)', 'stroke-width': vw * 0.002,
+      'stroke-dasharray': (vw * 0.01) + ' ' + (vw * 0.008)
+    }));
 
     svg.appendChild(el('path', {
       d: outline.d, fill: 'var(--shape-fill)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.006, 'stroke-linejoin': 'round'
     }));
+    if (outline.hole) {
+      svg.appendChild(el('circle', {
+        cx: outline.hole.cx, cy: outline.hole.cy, r: outline.hole.r,
+        fill: 'var(--bg)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.005
+      }));
+    }
   }
 
   function updateHandleDims() {
     const dims = document.getElementById('dims');
     const hs = handleState;
-    const label1 = hs.family === 'cutout' ? 'Length' : 'Width';
-    const label2 = hs.family === 'cutout' ? 'Width' : 'Depth';
-    dims.innerHTML = label1 + ': ' + hs.dim1.toFixed(3) + '" (' + toFraction16(hs.dim1) + ') &nbsp;&middot;&nbsp; ' +
-      label2 + ': ' + hs.dim2.toFixed(3) + '" (' + toFraction16(hs.dim2) + ')';
+    dims.innerHTML = 'Board width: ' + hs.boardWidth.toFixed(3) + '" (' + toFraction16(hs.boardWidth) + ') &nbsp;&middot;&nbsp; ' +
+      'Grip width: ' + hs.gripWidth.toFixed(3) + '" (' + toFraction16(hs.gripWidth) + ')';
   }
 
-  function handleLabelParagraphs() {
+  const HANDLE_FAMILY_NAMES = { rounded: 'Rounded', pointed: 'Pointed', cleaver: 'Cleaver Notch', swirl: 'Swirl' };
+
+  function handleLabelParagraphs(scale) {
     const hs = handleState;
     const paras = [];
-    if (hs.family === 'cutout') {
-      paras.push('Handle Maker — Cutout Hole');
-      paras.push('Length: ' + hs.dim1.toFixed(3) + '" (' + toFraction16(hs.dim1) + ')   Width: ' + hs.dim2.toFixed(3) + '" (' + toFraction16(hs.dim2) + ')');
-      paras.push('SOLID line = cut line — rout or drill out the full closed loop.');
-      paras.push('Dashed cross = centerlines, for positioning the template on your stock.');
-    } else {
-      paras.push('Handle Maker — Edge Scoop');
-      paras.push('Width: ' + hs.dim1.toFixed(3) + '" (' + toFraction16(hs.dim1) + ')   Depth: ' + hs.dim2.toFixed(3) + '" (' + toFraction16(hs.dim2) + ')');
-      paras.push('SOLID line = cut line     DASHED line = your material’s edge (reference only, not cut)');
-      paras.push('Align the dashed line with the true edge of your stock, then trace and cut the solid curve.');
-    }
-    paras.push('Printed at true 1:1 scale.');
+    paras.push('Handle Maker — ' + HANDLE_FAMILY_NAMES[hs.family]);
+    paras.push('Board width: ' + hs.boardWidth.toFixed(3) + '" (' + toFraction16(hs.boardWidth) + ')   Grip width: ' + hs.gripWidth.toFixed(3) + '" (' + toFraction16(hs.gripWidth) + ')');
+    paras.push('SOLID line = cut line     DASHED line = shoulder — align with where your board is already cut straight');
+    paras.push('Trace the solid curve onto the end of your board blank, positioning the dashed line at your board’s straight edge.');
+    paras.push(scale < 1 ? ('Scaled to ' + (scale * 100).toFixed(0) + '% to fit on one sheet — this design is unusually large for a handle.') : 'Printed at true 1:1 scale.');
     return paras;
   }
 
@@ -947,23 +1108,29 @@
     const printSheetEl = document.getElementById('printSheet');
     printSheetEl.innerHTML = '';
     const outline = buildHandleOutline();
-    const bbox = computeBBox(outline.pts);
+    const bbox = computeBBox(outline.allPts);
+
+    // safety net only: the swirl family's curl isn't simple to bound
+    // analytically like the other families' sliders are, so if a
+    // combination is ever big enough to risk overflowing the sheet,
+    // scale the whole design down rather than let it run off the page
+    const scale = Math.min(USABLE_W / bbox.w, USABLE_H / bbox.h, 1);
 
     const svg = svgPage();
-    const originX = PAGE_W / 2 - (bbox.minX + bbox.maxX) / 2;
-    const originY = MARGIN + 0.35 - bbox.minY;
-    const g = el('g', { transform: 'translate(' + originX + ' ' + originY + ')' });
-    g.appendChild(el('path', { d: outline.d, fill: 'none', stroke: '#000', 'stroke-width': 0.02 }));
-    if (outline.family === 'cutout') {
-      g.appendChild(el('line', { x1: bbox.minX - 0.15, y1: 0, x2: bbox.maxX + 0.15, y2: 0, stroke: '#000', 'stroke-width': 0.012, 'stroke-dasharray': '0.06 0.05' }));
-      g.appendChild(el('line', { x1: 0, y1: bbox.minY - 0.15, x2: 0, y2: bbox.maxY + 0.15, stroke: '#000', 'stroke-width': 0.012, 'stroke-dasharray': '0.06 0.05' }));
-    } else {
-      g.appendChild(el('line', { x1: -outline.a - 0.15, y1: 0, x2: outline.a + 0.15, y2: 0, stroke: '#000', 'stroke-width': 0.015, 'stroke-dasharray': '0.08 0.06' }));
+    const originX = PAGE_W / 2 - (bbox.minX + bbox.maxX) / 2 * scale;
+    const originY = MARGIN + 0.35 - bbox.minY * scale;
+    const g = el('g', { transform: 'translate(' + originX + ' ' + originY + ') scale(' + scale + ')' });
+    g.appendChild(el('path', { d: pointsToOpenPath(outline.allPts), fill: 'none', stroke: '#000', 'stroke-width': (0.02 / scale) }));
+    const w2 = handleState.boardWidth / 2;
+    g.appendChild(el('line', { x1: -w2, y1: 0, x2: w2, y2: 0, stroke: '#000', 'stroke-width': (0.015 / scale), 'stroke-dasharray': (0.08 / scale) + ' ' + (0.06 / scale) }));
+    g.appendChild(el('line', { x1: 0, y1: 0, x2: 0, y2: -0.3 / scale, stroke: '#000', 'stroke-width': (0.012 / scale), 'stroke-dasharray': (0.05 / scale) + ' ' + (0.04 / scale) }));
+    if (outline.hole) {
+      g.appendChild(el('circle', { cx: outline.hole.cx, cy: outline.hole.cy, r: outline.hole.r, fill: 'none', stroke: '#000', 'stroke-width': (0.02 / scale) }));
     }
     svg.appendChild(g);
 
-    const shapeLeft = originX + bbox.minX, shapeRight = originX + bbox.maxX, shapeBottom = originY + bbox.maxY;
-    svg.appendChild(buildFooterLayout(shapeLeft, shapeRight, shapeBottom, handleLabelParagraphs()));
+    const shapeLeft = originX + bbox.minX * scale, shapeRight = originX + bbox.maxX * scale, shapeBottom = originY + bbox.maxY * scale;
+    svg.appendChild(buildFooterLayout(shapeLeft, shapeRight, shapeBottom, handleLabelParagraphs(scale)));
     printSheetEl.appendChild(wrapPrintPage(svg));
   }
 
@@ -974,26 +1141,43 @@
     buildHandlePrintSheet();
   }
 
+  const HANDLE_PLAIN_NUMBER_KEYS = { neckCurve: true, pointCurve: true, curlTurns: true };
   function handleFormatValue(key, val) {
-    return key === 'power' ? val.toFixed(2) : (val.toFixed(3) + '" (' + toFraction16(val) + ')');
+    return HANDLE_PLAIN_NUMBER_KEYS[key] ? val.toFixed(2) : (val.toFixed(3) + '" (' + toFraction16(val) + ')');
   }
 
-  function updateHandleFieldLabels() {
-    const cutout = handleState.family === 'cutout';
-    document.getElementById('handleDim1Label').textContent = cutout ? 'Length' : 'Width';
-    document.getElementById('handleDim2Label').textContent = cutout ? 'Width' : 'Depth';
-    document.getElementById('handleFamilyCutoutBtn').classList.toggle('active', cutout);
-    document.getElementById('handleFamilyScoopBtn').classList.toggle('active', !cutout);
+  function updateHandleFieldVisibility() {
+    const hs = handleState;
+    const show = function (id, on) { document.getElementById(id).style.display = on ? '' : 'none'; };
+    show('hField-capDepth', hs.family === 'rounded' || hs.family === 'pointed' || hs.family === 'cleaver');
+    show('hField-hasHole', hs.family === 'rounded');
+    show('hField-holeDiameter', hs.family === 'rounded' && hs.hasHole);
+    show('hField-pointCurve', hs.family === 'pointed');
+    show('hField-notchWidth', hs.family === 'cleaver');
+    show('hField-notchDepth', hs.family === 'cleaver');
+    show('hField-curlTurns', hs.family === 'swirl');
+    show('hField-curlTightness', hs.family === 'swirl');
+    ['Rounded', 'Pointed', 'Cleaver', 'Swirl'].forEach(function (label) {
+      document.getElementById('handleFamily' + label + 'Btn').classList.toggle('active', hs.family === label.toLowerCase());
+    });
   }
+
+  const HANDLE_FIELD_MAP = {
+    hBoardWidthInput: 'boardWidth', hGripWidthInput: 'gripWidth', hNeckLengthInput: 'neckLength',
+    hGripLengthInput: 'gripLength', hNeckCurveInput: 'neckCurve', hCapDepthInput: 'capDepth',
+    hPointCurveInput: 'pointCurve', hNotchWidthInput: 'notchWidth', hNotchDepthInput: 'notchDepth',
+    hCurlTurnsInput: 'curlTurns', hCurlTightnessInput: 'curlTightness', hHoleDiameterInput: 'holeDiameter'
+  };
 
   function syncHandleControlsFromState() {
-    document.getElementById('handleDim1Input').value = handleState.dim1;
-    document.getElementById('handleDim1InputVal').textContent = handleFormatValue('dim1', handleState.dim1);
-    document.getElementById('handleDim2Input').value = handleState.dim2;
-    document.getElementById('handleDim2InputVal').textContent = handleFormatValue('dim2', handleState.dim2);
-    document.getElementById('handlePowerInput').value = handleState.power;
-    document.getElementById('handlePowerInputVal').textContent = handleFormatValue('power', handleState.power);
-    updateHandleFieldLabels();
+    const hs = handleState;
+    for (const id in HANDLE_FIELD_MAP) {
+      const key = HANDLE_FIELD_MAP[id];
+      document.getElementById(id).value = hs[key];
+      document.getElementById(id + 'Val').textContent = handleFormatValue(key, hs[key]);
+    }
+    document.getElementById('hHasHoleCheckbox').checked = hs.hasHole;
+    updateHandleFieldVisibility();
   }
 
   function populateHandlePresetSelect() {
@@ -1006,11 +1190,10 @@
     });
   }
 
+  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375 };
+
   function applyHandlePreset(p) {
-    handleState.family = p.family;
-    handleState.dim1 = p.dim1;
-    handleState.dim2 = p.dim2;
-    handleState.power = p.power;
+    Object.assign(handleState, HANDLE_DEFAULTS, p);
     syncHandleControlsFromState();
     const idx = handleFamilyPresets(handleState.family).indexOf(p);
     if (idx >= 0) document.getElementById('handlePresetSelect').value = idx;
@@ -1233,7 +1416,7 @@
       document.getElementById('toolTitle').textContent = isArch ? 'Backrest Arch Designer' : 'Handle Maker';
       document.getElementById('toolSub').textContent = isArch
         ? 'Design a symmetric arched top corner, then print a true-to-scale half-pattern to trace.'
-        : 'Design a hand-hold cutout for cutting boards and similar projects, then print a true-to-scale template.';
+        : 'Design a cutting-board handle silhouette — neck, grip, and end style — then print a true-to-scale template to trace.';
       document.title = isArch ? 'Backrest Arch Designer' : 'Handle Maker';
       document.querySelectorAll('.toolMenuItem').forEach(function (btn) {
         btn.classList.toggle('active', btn.getAttribute('data-tool') === mode);
@@ -1301,23 +1484,38 @@
     });
 
     // --- Handle Maker wiring ---
-    document.getElementById('handleFamilyCutoutBtn').addEventListener('click', function () { switchHandleFamily('cutout'); });
-    document.getElementById('handleFamilyScoopBtn').addEventListener('click', function () { switchHandleFamily('scoop'); });
+    document.getElementById('handleFamilyRoundedBtn').addEventListener('click', function () { switchHandleFamily('rounded'); });
+    document.getElementById('handleFamilyPointedBtn').addEventListener('click', function () { switchHandleFamily('pointed'); });
+    document.getElementById('handleFamilyCleaverBtn').addEventListener('click', function () { switchHandleFamily('cleaver'); });
+    document.getElementById('handleFamilySwirlBtn').addEventListener('click', function () { switchHandleFamily('swirl'); });
     document.getElementById('handlePresetSelect').addEventListener('change', function (e) {
       const p = handleFamilyPresets(handleState.family)[parseInt(e.target.value, 10)];
       if (p) applyHandlePreset(p);
     });
-    bindHandleRange('handleDim1Input', 'dim1', parseFloat);
-    bindHandleRange('handleDim2Input', 'dim2', parseFloat);
-    bindHandleRange('handlePowerInput', 'power', parseFloat);
+
+    bindHandleRange('hBoardWidthInput', 'boardWidth', parseFloat);
+    bindHandleRange('hGripWidthInput', 'gripWidth', parseFloat);
+    bindHandleRange('hNeckLengthInput', 'neckLength', parseFloat);
+    bindHandleRange('hGripLengthInput', 'gripLength', parseFloat);
+    bindHandleRange('hNeckCurveInput', 'neckCurve', parseFloat);
+    bindHandleRange('hCapDepthInput', 'capDepth', parseFloat);
+    bindHandleRange('hPointCurveInput', 'pointCurve', parseFloat);
+    bindHandleRange('hNotchWidthInput', 'notchWidth', parseFloat);
+    bindHandleRange('hNotchDepthInput', 'notchDepth', parseFloat);
+    bindHandleRange('hCurlTurnsInput', 'curlTurns', parseFloat);
+    bindHandleRange('hCurlTightnessInput', 'curlTightness', parseFloat);
+    bindHandleRange('hHoleDiameterInput', 'holeDiameter', parseFloat);
+
+    document.getElementById('hHasHoleCheckbox').addEventListener('change', function (e) {
+      handleState.hasHole = e.target.checked;
+      updateHandleFieldVisibility();
+      renderHandle();
+    });
 
     // pre-sync the handle maker's controls to its default preset without
     // rendering into the shared canvas -- that only happens once the tool
     // is actually switched to, via switchAppMode -> renderCurrent
-    handleState.family = handlePresets[0].family;
-    handleState.dim1 = handlePresets[0].dim1;
-    handleState.dim2 = handlePresets[0].dim2;
-    handleState.power = handlePresets[0].power;
+    Object.assign(handleState, HANDLE_DEFAULTS, handlePresets[0]);
     populateHandlePresetSelect();
     syncHandleControlsFromState();
     document.getElementById('handlePresetSelect').value = 0;
