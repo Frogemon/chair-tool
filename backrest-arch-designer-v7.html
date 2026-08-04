@@ -1010,8 +1010,14 @@
   // shape meeting cleanly at the center, same as the other three families.
   function buildSwirlCap(hs, gripTop) {
     const halfWidth0 = hs.gripWidth / 4;
-    const R0 = Math.max(hs.gripWidth * 1.15, 0.75);
-    const Rmin = Math.max(hs.curlTightness, 0.08);
+    // the curl's opening arc swings up by roughly R0 before it turns back
+    // down into the coil -- with a wide grip (big R0) but little headroom
+    // above it (short neck+grip), that arc can swing back up past the
+    // shoulder line (y=0), which isn't cuttable. Cap R0 against the actual
+    // headroom available so the loop always has room to open and close
+    // before reaching the shoulder.
+    const R0 = Math.min(Math.max(hs.gripWidth * 1.15, 0.75), gripTop.y * 0.6);
+    const Rmin = Math.min(Math.max(hs.curlTightness, 0.08), R0 * 0.6);
     const totalTurn = hs.curlTurns * Math.PI * 2;
     const ds = 0.02;
     // logarithmic (equiangular) decay, not linear: radius shrinks by a
@@ -1031,11 +1037,19 @@
       const dHeading = ds / R;
       heading += dHeading;
       turned += dHeading;
-      x += -Math.sin(heading) * ds;
+      // curl away from the centerline first (+x), not across it -- the
+      // right half's spiral must stay on its own side so the mirrored
+      // pair doesn't cross itself where they meet the grip
+      x += Math.sin(heading) * ds;
       y += -Math.cos(heading) * ds;
       // eased taper (not linear): thins gradually at first, then faster
-      // near the tip, tapering to a fine point rather than a blunt end
-      let hw = halfWidth0 * Math.pow(Math.max(0, 1 - t), 1.4);
+      // near the tip, tapering to a fine point rather than a blunt end.
+      // Built on smoothstep (zero derivative at t=0) rather than a raw
+      // power curve, so the ribbon's width isn't already shrinking the
+      // instant it leaves the grip -- that's what kept the mirrored
+      // inner edges from meeting the centerline tangent to vertical,
+      // showing up as a sharp notch where the two curls met.
+      let hw = halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(t)), 1.4);
       hw = Math.min(hw, R * 0.72);
       hw = Math.max(hw, 0.02);
       spine.push({ x: x, y: y, heading: heading, hw: hw });
