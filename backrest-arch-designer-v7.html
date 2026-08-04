@@ -109,6 +109,15 @@
     font-weight: 600; color: var(--text); margin-bottom: 4px;
   }
   .field label output, .field label span.val { font-weight: 400; color: var(--accent); }
+  .field label output {
+    cursor: text; border-radius: 4px; padding: 0 3px; margin: 0 -3px;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .field label output:hover, .field label output:focus { background: var(--surface-alt); outline: none; }
+  .inlineValInput {
+    width: 5.5em; font: inherit; font-weight: 600; color: var(--accent); background: var(--surface);
+    border: 1px solid var(--accent); border-radius: 4px; padding: 0 3px;
+  }
   .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
   #controls select {
@@ -242,8 +251,8 @@
 
       <div class="field">
         <label for="widthInput">Width (full) <output id="widthInputVal"></output></label>
-        <input type="range" id="widthInput" min="4" max="10" step="0.0625">
-        <div class="hint">Capped at 10" so each half (with room for foil-cusp bulge) always prints true-to-scale on one 8.5×11 sheet — never the scaled/gridded fallback.</div>
+        <input type="range" id="widthInput" min="4" max="12" step="0.0625">
+        <div class="hint">Above ~10" with foil cusps, a half may need the scaled/gridded fallback sheet instead of true 1:1 — the live "fits one sheet" check above will tell you.</div>
       </div>
 
       <div class="field" id="field-height">
@@ -753,9 +762,12 @@
     const rulerBottom = rulerY + rulerContentH;
 
     // below the ruler is the natural spot when there's room; otherwise use
-    // whichever side of the shape has more free space (always available at
-    // these slider bounds: width tops out at 10in / halfW 5in, which still
-    // leaves >=1.4in of margin on one side or the other)
+    // whichever side of the shape has more free space. Not every width/
+    // foil combination guarantees 1.4in here (a maxed-out foiled design
+    // can be tight on both sides at once) -- useSideColumn just falls
+    // back to the "below" placement in that case, which still works as
+    // long as there's bottom room, so this stays a soft preference, not
+    // a hard requirement.
     const sideW = Math.max(freeRightW, freeLeftW);
     const useSideColumn = freeBottomH < 1.6 && sideW >= 1.4;
     if (!useSideColumn) {
@@ -983,25 +995,34 @@
   // shape meeting cleanly at the center, same as the other three families.
   function buildSwirlCap(hs, gripTop) {
     const halfWidth0 = hs.gripWidth / 4;
-    const R0 = Math.max(hs.gripWidth * 0.9, 0.6);
+    const R0 = Math.max(hs.gripWidth * 1.15, 0.75);
     const Rmin = Math.max(hs.curlTightness, 0.08);
     const totalTurn = hs.curlTurns * Math.PI * 2;
-    const ds = 0.025;
+    const ds = 0.02;
+    // logarithmic (equiangular) decay, not linear: radius shrinks by a
+    // constant RATIO per unit of turning rather than a constant amount,
+    // which is what nautilus shells and fern fiddleheads actually do --
+    // it starts gentle and self-similar, then tightens increasingly fast
+    // toward the core, reading as hand-carved rather than a uniform
+    // mechanical coil of rope (which a linear/Archimedean decay gives)
+    const k = Math.log(R0 / Rmin);
 
     const spine = [];
     let x = hs.gripWidth / 4, y = gripTop.y, heading = 0, turned = 0;
     spine.push({ x: x, y: y, heading: heading, hw: halfWidth0 });
     while (turned < totalTurn) {
       const t = turned / totalTurn;
-      const R = R0 + (Rmin - R0) * t;
+      const R = R0 * Math.exp(-k * t);
       const dHeading = ds / R;
       heading += dHeading;
       turned += dHeading;
       x += -Math.sin(heading) * ds;
       y += -Math.cos(heading) * ds;
-      let hw = halfWidth0 * (1 - 0.85 * t);
-      hw = Math.min(hw, R * 0.7);
-      hw = Math.max(hw, 0.025);
+      // eased taper (not linear): thins gradually at first, then faster
+      // near the tip, tapering to a fine point rather than a blunt end
+      let hw = halfWidth0 * Math.pow(Math.max(0, 1 - t), 1.4);
+      hw = Math.min(hw, R * 0.72);
+      hw = Math.max(hw, 0.02);
       spine.push({ x: x, y: y, heading: heading, hw: hw });
     }
 
@@ -1506,6 +1527,72 @@
     handle.addEventListener('pointercancel', endDrag);
   }
 
+  // Click any slider's value display to type an exact number instead of
+  // dragging. Works generically for every field in both tools with zero
+  // changes to the existing slider/display code: it finds the paired range
+  // input by id convention (xxxVal -> xxx), temporarily swaps in a number
+  // input, and on commit just dispatches the range's own 'input' event --
+  // the existing bindRange/bindHandleRange listener does the rest,
+  // including restoring the output's normal formatted text.
+  function makeValueEditable(outputEl) {
+    outputEl.tabIndex = 0;
+    function startEdit() {
+      if (outputEl.querySelector('input')) return;
+      const range = document.getElementById(outputEl.id.replace(/Val$/, ''));
+      if (!range) return;
+      const prevHtml = outputEl.innerHTML;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = range.step || 'any';
+      input.min = range.min;
+      input.max = range.max;
+      input.value = parseFloat(range.value);
+      input.className = 'inlineValInput';
+      outputEl.innerHTML = '';
+      outputEl.appendChild(input);
+      input.focus();
+      input.select();
+      // removing a focused element from the DOM fires a synchronous blur
+      // in most browsers, which would otherwise re-enter finish() while
+      // the first call's own DOM mutation is still in progress -- done
+      // guards that, and dropping the blur listener up front (before
+      // mutating anything) avoids relying on the guard alone
+      let done = false;
+      function finish(shouldCommit) {
+        if (done) return;
+        done = true;
+        input.removeEventListener('blur', onBlur);
+        if (shouldCommit) {
+          let v = parseFloat(input.value);
+          if (!isFinite(v)) v = parseFloat(range.value);
+          v = Math.max(parseFloat(range.min), Math.min(parseFloat(range.max), v));
+          range.value = v;
+          range.dispatchEvent(new Event('input', { bubbles: true })); // bindRange/bindHandleRange repaints outputEl's text
+        } else {
+          outputEl.innerHTML = prevHtml;
+        }
+      }
+      function onBlur() { finish(true); }
+      input.addEventListener('keydown', function (e) {
+        // stopPropagation matters here: outputEl has its own Enter listener
+        // (to start editing via the keyboard when focused-but-not-editing),
+        // and without this the same Enter keystroke bubbles up right after
+        // finish() removes this input, re-triggering a fresh edit session
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); finish(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+      });
+      input.addEventListener('blur', onBlur);
+    }
+    outputEl.addEventListener('click', startEdit);
+    outputEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !outputEl.querySelector('input')) startEdit();
+    });
+  }
+
+  function initEditableValues() {
+    document.querySelectorAll('output[id$="Val"]').forEach(makeValueEditable);
+  }
+
   function init() {
     document.getElementById('familyPointedBtn').addEventListener('click', function () { switchFamily('pointed'); });
     document.getElementById('familyArcBtn').addEventListener('click', function () { switchFamily('arc'); });
@@ -1592,6 +1679,8 @@
 
     populatePresetSelect();
     applyPreset(familyPresets('pointed')[2]); // Gothic Arch
+
+    initEditableValues();
   }
 
   init();
