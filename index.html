@@ -1031,6 +1031,29 @@
     const spine = [];
     let x = hs.gripWidth / 4, y = gripTop.y, heading = 0, turned = 0;
     spine.push({ x: x, y: y, heading: heading, hw: halfWidth0 });
+
+    // Short straight lead-in before any turning starts: the ribbon is at
+    // its full grip-matched width right where it leaves the grip, and a
+    // curve that thick relative to the curl's own radius will fold back
+    // on itself almost immediately once it starts turning -- the outer
+    // edge's opening sweep re-crosses the inner edge a little further
+    // along, showing up as a thin self-intersecting sliver right at the
+    // base of the curl. A brief zero-curvature run gives the ribbon room
+    // to taper down to a safe width first, since a straight offset can't
+    // self-cross. (Eased same as the main taper, so the tangent at the
+    // centerline meeting point -- where the mirrored curls join -- is
+    // still exactly vertical.)
+    const leadIn = 0.15, leadStep = ds;
+    let leadLen = 0;
+    while (leadLen < leadIn) {
+      leadLen += leadStep;
+      y += -leadStep;
+      const lt = leadLen / leadIn;
+      const hw = Math.max(halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(lt)), 3), 0.02);
+      spine.push({ x: x, y: y, heading: 0, hw: hw });
+    }
+    const hwAfterLeadIn = spine[spine.length - 1].hw;
+
     while (turned < totalTurn) {
       const t = turned / totalTurn;
       const R = R0 * Math.exp(-k * t);
@@ -1043,13 +1066,8 @@
       x += Math.sin(heading) * ds;
       y += -Math.cos(heading) * ds;
       // eased taper (not linear): thins gradually at first, then faster
-      // near the tip, tapering to a fine point rather than a blunt end.
-      // Built on smoothstep (zero derivative at t=0) rather than a raw
-      // power curve, so the ribbon's width isn't already shrinking the
-      // instant it leaves the grip -- that's what kept the mirrored
-      // inner edges from meeting the centerline tangent to vertical,
-      // showing up as a sharp notch where the two curls met.
-      let hw = halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(t)), 1.4);
+      // near the tip, tapering to a fine point rather than a blunt end
+      let hw = hwAfterLeadIn * Math.pow(Math.max(0, 1 - smoothstep01(t)), 1.4);
       hw = Math.min(hw, R * 0.72);
       hw = Math.max(hw, 0.02);
       spine.push({ x: x, y: y, heading: heading, hw: hw });
