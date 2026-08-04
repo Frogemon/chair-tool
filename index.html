@@ -165,7 +165,9 @@
 
   /* ---------- stage / preview ---------- */
   #stage { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; position: relative; }
-  #previewSvg { width: 100%; height: 100%; max-width: 800px; max-height: 800px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+  #previewSvg { width: 100%; height: 100%; max-width: 800px; max-height: 800px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; touch-action: none; }
+  .dragHandle { cursor: grab; }
+  .dragHandle:active { cursor: grabbing; }
   #dims { margin-top: 10px; font-size: 13px; color: var(--text-muted); text-align: center; font-variant-numeric: tabular-nums; }
 
   /* ---------- print sheet (offscreen, only used for print/export) ----------
@@ -1072,16 +1074,105 @@
     return d;
   }
 
+  // The swirl family's abstract curl controls (turns/tightness) live on a
+  // small drawn track to the right of the shape, since they don't
+  // correspond to any single point on the traced curve. Shared between
+  // drawing and dragging so both agree exactly on where the track is.
+  function swirlTrackGeometry(hs, gripTop) {
+    const trackX = hs.boardWidth / 2 + 0.55;
+    const trackH = 1.3;
+    const turnsY0 = gripTop.y - 0.1, turnsY1 = turnsY0 + trackH;
+    const tightY0 = turnsY1 + 0.4, tightY1 = tightY0 + trackH;
+    return { trackX: trackX, turnsY0: turnsY0, turnsY1: turnsY1, tightY0: tightY0, tightY1: tightY1 };
+  }
+
+  function sliderBounds(id) {
+    const e = document.getElementById(id);
+    return { min: parseFloat(e.min), max: parseFloat(e.max) };
+  }
+
+  function circleHandle(cx, cy, r, param) {
+    return el('circle', {
+      cx: cx, cy: cy, r: r, 'data-drag': param, class: 'dragHandle',
+      fill: 'var(--surface)', stroke: 'var(--accent)', 'stroke-width': r * 0.35
+    });
+  }
+
+  function diamondHandle(cx, cy, s, param) {
+    const g = el('g', { transform: 'translate(' + cx + ' ' + cy + ') rotate(45)', 'data-drag': param, class: 'dragHandle' });
+    g.appendChild(el('rect', { x: -s / 2, y: -s / 2, width: s, height: s, fill: 'var(--surface)', stroke: 'var(--guide-warn)', 'stroke-width': s * 0.2 }));
+    return g;
+  }
+
+  // Draggable control points, overlaid on the live preview only (never the
+  // print sheet). Circles are "dimension" handles sitting directly on the
+  // traced curve; diamonds are bezier-style curve-shape controls that
+  // aren't themselves on the curve; the swirl's two abstract parameters
+  // get a small drawn slider track instead, since turns/tightness don't
+  // correspond to a single point on that curve either.
+  function drawHandleControlPoints(svg, vw) {
+    const hs = handleState;
+    const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
+    const r = Math.max(vw * 0.017, 0.085);
+    const g = el('g', { id: 'dragHandles' });
+
+    g.appendChild(circleHandle(hs.boardWidth / 2, 0, r, 'boardWidth'));
+    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength + hs.gripLength / 2, r, 'gripWidth'));
+    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength, r, 'neckLength'));
+    g.appendChild(circleHandle(hs.gripWidth / 2, gripTop.y, r, 'gripLength'));
+
+    const midX = (hs.gripWidth / 2 + hs.boardWidth / 2) / 2, halfDiff = (hs.boardWidth / 2 - hs.gripWidth / 2) * 0.5;
+    g.appendChild(diamondHandle(midX - hs.neckCurve * halfDiff, hs.neckLength / 2, r * 1.5, 'neckCurve'));
+
+    if (hs.family !== 'swirl') {
+      g.appendChild(circleHandle(0, gripTop.y + hs.capDepth, r, 'capDepth'));
+    }
+    if (hs.family === 'rounded' && hs.hasHole) {
+      g.appendChild(circleHandle(hs.holeDiameter / 2, gripTop.y + hs.capDepth * 0.55, r * 0.8, 'holeDiameter'));
+    }
+    if (hs.family === 'pointed') {
+      const a = hs.gripWidth / 2;
+      g.appendChild(diamondHandle(a * (1 - hs.pointCurve), gripTop.y + hs.capDepth * 0.5, r * 1.5, 'pointCurve'));
+    }
+    if (hs.family === 'cleaver') {
+      const notchHalfW = Math.min(hs.notchWidth / 2, hs.gripWidth / 2 * 0.92);
+      const flatY = gripTop.y + hs.capDepth;
+      g.appendChild(circleHandle(notchHalfW, flatY, r, 'notchWidth'));
+      g.appendChild(circleHandle(0, flatY - Math.min(hs.notchDepth, hs.capDepth * 0.92), r, 'notchDepth'));
+    }
+    if (hs.family === 'swirl') {
+      const trk = swirlTrackGeometry(hs, gripTop);
+      const turnsB = sliderBounds('hCurlTurnsInput'), tightB = sliderBounds('hCurlTightnessInput');
+      const turnsFrac = (hs.curlTurns - turnsB.min) / (turnsB.max - turnsB.min);
+      const tightFrac = (hs.curlTightness - tightB.min) / (tightB.max - tightB.min);
+      const fs = vw * 0.024;
+      g.appendChild(el('line', { x1: trk.trackX, y1: trk.turnsY0, x2: trk.trackX, y2: trk.turnsY1, stroke: 'var(--border)', 'stroke-width': vw * 0.0025 }));
+      g.appendChild(textEl({ x: trk.trackX - r * 1.6, y: trk.turnsY0 - r * 1.1, 'font-size': fs, fill: 'var(--text-muted)', 'font-family': 'sans-serif' }, 'Turns'));
+      g.appendChild(circleHandle(trk.trackX, trk.turnsY0 + turnsFrac * (trk.turnsY1 - trk.turnsY0), r * 0.85, 'curlTurns'));
+      g.appendChild(el('line', { x1: trk.trackX, y1: trk.tightY0, x2: trk.trackX, y2: trk.tightY1, stroke: 'var(--border)', 'stroke-width': vw * 0.0025 }));
+      g.appendChild(textEl({ x: trk.trackX - r * 1.6, y: trk.tightY0 - r * 1.1, 'font-size': fs, fill: 'var(--text-muted)', 'font-family': 'sans-serif' }, 'Tight'));
+      g.appendChild(circleHandle(trk.trackX, trk.tightY0 + tightFrac * (trk.tightY1 - trk.tightY0), r * 0.85, 'curlTightness'));
+    }
+    svg.appendChild(g);
+  }
+
   function drawHandlePreview(outline) {
     const svg = document.getElementById('previewSvg');
     svg.innerHTML = '';
+    const hs = handleState;
     const bbox = computeBBox(outline.allPts);
     const fits = (bbox.maxX - bbox.minX) <= USABLE_W && (bbox.maxY - bbox.minY) <= USABLE_H;
     const stroke = fits ? 'var(--guide-ok)' : 'var(--guide-warn)';
 
     const guideX = (bbox.minX + bbox.maxX) / 2 - USABLE_W / 2, guideY = Math.min(0, bbox.minY);
-    const unionMinX = Math.min(bbox.minX, guideX), unionMaxX = Math.max(bbox.maxX, guideX + USABLE_W);
-    const unionMinY = Math.min(bbox.minY, guideY), unionMaxY = Math.max(bbox.maxY, guideY + USABLE_H);
+    let unionMinX = Math.min(bbox.minX, guideX), unionMaxX = Math.max(bbox.maxX, guideX + USABLE_W);
+    let unionMinY = Math.min(bbox.minY, guideY), unionMaxY = Math.max(bbox.maxY, guideY + USABLE_H);
+    if (hs.family === 'swirl') {
+      const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
+      const trk = swirlTrackGeometry(hs, gripTop);
+      unionMaxX = Math.max(unionMaxX, trk.trackX + 0.5);
+      unionMaxY = Math.max(unionMaxY, trk.tightY1 + 0.2);
+    }
     const unionW = unionMaxX - unionMinX, unionH = unionMaxY - unionMinY;
     const pad = Math.max(unionW, unionH) * 0.06 + 0.25;
     const vx = unionMinX - pad, vy = unionMinY - pad, vw = unionW + pad * 2, vh = unionH + pad * 2;
@@ -1096,7 +1187,7 @@
       x: guideX + 0.1, y: guideY - pad * 0.25, 'font-size': Math.max(vw, vh) * 0.032, fill: stroke, 'font-family': 'sans-serif'
     }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet — will scale down for print'));
 
-    const w2 = handleState.boardWidth / 2;
+    const w2 = hs.boardWidth / 2;
     svg.appendChild(el('line', {
       x1: -w2 - 0.1, y1: 0, x2: w2 + 0.1, y2: 0, stroke: 'var(--centerline)', 'stroke-width': vw * 0.002,
       'stroke-dasharray': (vw * 0.01) + ' ' + (vw * 0.008)
@@ -1111,6 +1202,7 @@
         fill: 'var(--bg)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.005
       }));
     }
+    drawHandleControlPoints(svg, vw);
   }
 
   function updateHandleDims() {
@@ -1163,11 +1255,15 @@
     printSheetEl.appendChild(wrapPrintPage(svg));
   }
 
-  function renderHandle() {
+  // skipPrint is used while actively dragging a control point: the print
+  // sheet isn't visible during interaction, so rebuilding it (ruler, wrapped
+  // footer text, etc.) on every pointermove is pure waste. The drag-end
+  // handler calls renderHandle() once more, without skipping, to catch up.
+  function renderHandle(skipPrint) {
     const outline = buildHandleOutline();
     drawHandlePreview(outline);
     updateHandleDims();
-    buildHandlePrintSheet();
+    if (!skipPrint) buildHandlePrintSheet();
   }
 
   const HANDLE_PLAIN_NUMBER_KEYS = { neckCurve: true, pointCurve: true, curlTurns: true };
@@ -1278,6 +1374,148 @@
     syncHandleControlsFromState();
     document.getElementById('handlePresetSelect').selectedIndex = -1; // no preset matches a random combo
     renderHandle();
+  }
+
+  // ---------------------------------------------------------------
+  // draggable control points -- desktop mouse + mobile touch, via the
+  // Pointer Events API. Each handle's data-drag attribute names a key in
+  // HANDLE_DRAG_HANDLERS; dragging inverts the handle's on-canvas position
+  // back into the matching state field using the same formulas the
+  // geometry functions use to place it, so the handle and the slider
+  // always agree.
+  // ---------------------------------------------------------------
+
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+  function svgPointFromClient(svg, clientX, clientY) {
+    const pt = svg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const loc = pt.matrixTransform(ctm.inverse());
+    return { x: loc.x, y: loc.y };
+  }
+
+  function syncOneHandleControl(id, key) {
+    document.getElementById(id).value = handleState[key];
+    document.getElementById(id + 'Val').textContent = handleFormatValue(key, handleState[key]);
+  }
+
+  const HANDLE_DRAG_HANDLERS = {
+    boardWidth: function (p) {
+      const b = sliderBounds('hBoardWidthInput');
+      handleState.boardWidth = clamp(p.x * 2, b.min, b.max);
+      syncOneHandleControl('hBoardWidthInput', 'boardWidth');
+      renderHandle(true);
+    },
+    gripWidth: function (p) {
+      const b = sliderBounds('hGripWidthInput');
+      handleState.gripWidth = clamp(p.x * 2, b.min, b.max);
+      syncOneHandleControl('hGripWidthInput', 'gripWidth');
+      renderHandle(true);
+    },
+    neckLength: function (p) {
+      const b = sliderBounds('hNeckLengthInput');
+      handleState.neckLength = clamp(p.y, b.min, b.max);
+      syncOneHandleControl('hNeckLengthInput', 'neckLength');
+      renderHandle(true);
+    },
+    gripLength: function (p) {
+      const hs = handleState;
+      const b = sliderBounds('hGripLengthInput');
+      hs.gripLength = clamp(p.y - hs.neckLength, b.min, b.max);
+      syncOneHandleControl('hGripLengthInput', 'gripLength');
+      renderHandle(true);
+    },
+    neckCurve: function (p) {
+      const hs = handleState;
+      const midX = (hs.gripWidth / 2 + hs.boardWidth / 2) / 2, halfDiff = (hs.boardWidth / 2 - hs.gripWidth / 2) * 0.5;
+      const b = sliderBounds('hNeckCurveInput');
+      hs.neckCurve = Math.abs(halfDiff) < 1e-6 ? hs.neckCurve : clamp((midX - p.x) / halfDiff, b.min, b.max);
+      syncOneHandleControl('hNeckCurveInput', 'neckCurve');
+      renderHandle(true);
+    },
+    capDepth: function (p) {
+      const hs = handleState;
+      const gripTopY = hs.neckLength + hs.gripLength;
+      const b = sliderBounds('hCapDepthInput');
+      hs.capDepth = clamp(p.y - gripTopY, b.min, b.max);
+      syncOneHandleControl('hCapDepthInput', 'capDepth');
+      renderHandle(true);
+    },
+    pointCurve: function (p) {
+      const hs = handleState;
+      const a = hs.gripWidth / 2;
+      const b = sliderBounds('hPointCurveInput');
+      hs.pointCurve = a < 1e-6 ? hs.pointCurve : clamp(1 - p.x / a, b.min, b.max);
+      syncOneHandleControl('hPointCurveInput', 'pointCurve');
+      renderHandle(true);
+    },
+    notchWidth: function (p) {
+      const hs = handleState;
+      const b = sliderBounds('hNotchWidthInput');
+      hs.notchWidth = clamp(p.x * 2, b.min, Math.min(b.max, hs.gripWidth * 1.8));
+      syncOneHandleControl('hNotchWidthInput', 'notchWidth');
+      renderHandle(true);
+    },
+    notchDepth: function (p) {
+      const hs = handleState;
+      const flatY = hs.neckLength + hs.gripLength + hs.capDepth;
+      const b = sliderBounds('hNotchDepthInput');
+      hs.notchDepth = clamp(flatY - p.y, b.min, b.max);
+      syncOneHandleControl('hNotchDepthInput', 'notchDepth');
+      renderHandle(true);
+    },
+    holeDiameter: function (p) {
+      const b = sliderBounds('hHoleDiameterInput');
+      handleState.holeDiameter = clamp(p.x * 2, b.min, b.max);
+      syncOneHandleControl('hHoleDiameterInput', 'holeDiameter');
+      renderHandle(true);
+    },
+    curlTurns: function (p) {
+      const hs = handleState;
+      const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
+      const trk = swirlTrackGeometry(hs, gripTop), b = sliderBounds('hCurlTurnsInput');
+      const frac = clamp((p.y - trk.turnsY0) / (trk.turnsY1 - trk.turnsY0), 0, 1);
+      hs.curlTurns = b.min + frac * (b.max - b.min);
+      syncOneHandleControl('hCurlTurnsInput', 'curlTurns');
+      renderHandle(true);
+    },
+    curlTightness: function (p) {
+      const hs = handleState;
+      const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
+      const trk = swirlTrackGeometry(hs, gripTop), b = sliderBounds('hCurlTightnessInput');
+      const frac = clamp((p.y - trk.tightY0) / (trk.tightY1 - trk.tightY0), 0, 1);
+      hs.curlTightness = b.min + frac * (b.max - b.min);
+      syncOneHandleControl('hCurlTightnessInput', 'curlTightness');
+      renderHandle(true);
+    }
+  };
+
+  let activeHandleDragParam = null;
+
+  function initHandleDragging() {
+    const svg = document.getElementById('previewSvg');
+    svg.addEventListener('pointerdown', function (e) {
+      const target = e.target.closest('[data-drag]');
+      if (!target || appMode !== 'handle') return;
+      e.preventDefault();
+      activeHandleDragParam = target.getAttribute('data-drag');
+      try { svg.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+    });
+    svg.addEventListener('pointermove', function (e) {
+      if (!activeHandleDragParam) return;
+      const fn = HANDLE_DRAG_HANDLERS[activeHandleDragParam];
+      if (fn) fn(svgPointFromClient(svg, e.clientX, e.clientY));
+    });
+    function endDrag(e) {
+      if (!activeHandleDragParam) return;
+      try { svg.releasePointerCapture(e.pointerId); } catch (err) { /* not captured */ }
+      activeHandleDragParam = null;
+      renderHandle(); // catch up the print sheet, skipped during the drag itself
+    }
+    svg.addEventListener('pointerup', endDrag);
+    svg.addEventListener('pointercancel', endDrag);
   }
 
   // ---------------------------------------------------------------
@@ -1681,6 +1919,7 @@
     applyPreset(familyPresets('pointed')[2]); // Gothic Arch
 
     initEditableValues();
+    initHandleDragging();
   }
 
   init();
