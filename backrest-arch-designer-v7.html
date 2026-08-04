@@ -111,10 +111,16 @@
   .field label output, .field label span.val { font-weight: 400; color: var(--accent); }
   .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
-  select#presetSelect {
+  #controls select {
     width: 100%; padding: 8px; font-size: 13px; border: 1px solid var(--border);
     border-radius: 8px; background: var(--surface); color: var(--text); margin-bottom: 16px;
   }
+
+  .randomizeBtn {
+    width: 100%; padding: 10px 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600;
+    border: 1px dashed var(--accent); border-radius: 8px; background: var(--surface-alt); color: var(--accent); cursor: pointer;
+  }
+  .randomizeBtn:hover { background: var(--surface); }
 
   label.checkRow { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; }
   label.checkRow input { width: 20px; height: 20px; }
@@ -293,6 +299,8 @@
       </div>
 
       <select id="handlePresetSelect"></select>
+
+      <button id="handleRandomizeBtn" type="button" class="randomizeBtn">🎲 Randomize handle</button>
 
       <div class="field">
         <label for="hBoardWidthInput">Board width (at shoulder) <output id="hBoardWidthInputVal"></output></label>
@@ -1207,6 +1215,50 @@
     applyHandlePreset(handleFamilyPresets(fam)[0]);
   }
 
+  function randomBetween(min, max) { return min + Math.random() * (max - min); }
+
+  // Picks a random family and randomizes every parameter relevant to it,
+  // within ranges tuned to stay clear of the geometric edge cases already
+  // validated (e.g. notch/hole sizes scaled to the randomized grip width,
+  // rather than their independent slider maximums, so a narrow grip can't
+  // roll a notch wider than itself).
+  function randomizeHandle() {
+    const families = ['rounded', 'pointed', 'cleaver', 'swirl'];
+    const family = families[Math.floor(Math.random() * families.length)];
+    const boardWidth = randomBetween(3.5, 7.5);
+    const gripWidth = randomBetween(0.9, Math.min(2.75, boardWidth * 0.75));
+    const next = {
+      family: family,
+      boardWidth: boardWidth,
+      gripWidth: gripWidth,
+      neckLength: randomBetween(0.6, 2.25),
+      gripLength: randomBetween(1.25, 3.75),
+      neckCurve: randomBetween(0.1, 0.9)
+    };
+    if (family === 'rounded') {
+      next.capDepth = randomBetween(0.75, 2.25);
+      next.hasHole = Math.random() < 0.7;
+      next.holeDiameter = randomBetween(0.3125, 0.625);
+    } else if (family === 'pointed') {
+      next.capDepth = randomBetween(1, 2.4);
+      next.pointCurve = randomBetween(0.1, 0.9);
+    } else if (family === 'cleaver') {
+      next.capDepth = randomBetween(0.7, 1.6);
+      next.notchWidth = randomBetween(0.6, Math.min(2.2, gripWidth * 1.6));
+      next.notchDepth = randomBetween(0.3, next.capDepth * 0.85);
+    } else {
+      next.curlTurns = randomBetween(0.6, 1.7);
+      next.curlTightness = randomBetween(0.14, 0.45);
+    }
+
+    handleState.family = family;
+    populateHandlePresetSelect();
+    Object.assign(handleState, HANDLE_DEFAULTS, next);
+    syncHandleControlsFromState();
+    document.getElementById('handlePresetSelect').selectedIndex = -1; // no preset matches a random combo
+    renderHandle();
+  }
+
   // ---------------------------------------------------------------
   // export (PNG) — see file header notes: the reliable path across
   // sandboxed webviews is rendering the PNG as an in-page <img>, not
@@ -1492,6 +1544,7 @@
       const p = handleFamilyPresets(handleState.family)[parseInt(e.target.value, 10)];
       if (p) applyHandlePreset(p);
     });
+    document.getElementById('handleRandomizeBtn').addEventListener('click', randomizeHandle);
 
     bindHandleRange('hBoardWidthInput', 'boardWidth', parseFloat);
     bindHandleRange('hGripWidthInput', 'gripWidth', parseFloat);
