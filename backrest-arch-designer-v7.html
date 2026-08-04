@@ -169,6 +169,7 @@
   .dragHandle { cursor: grab; }
   .dragHandle:active { cursor: grabbing; }
   #dims { margin-top: 10px; font-size: 13px; color: var(--text-muted); text-align: center; font-variant-numeric: tabular-nums; }
+  .dragHint { display: inline-block; margin-top: 4px; font-size: 12px; color: var(--accent); }
 
   /* ---------- print sheet (offscreen, only used for print/export) ----------
      always rendered black-on-white regardless of app theme: it's a physical
@@ -1091,16 +1092,34 @@
     return { min: parseFloat(e.min), max: parseFloat(e.max) };
   }
 
-  function circleHandle(cx, cy, r, param) {
-    return el('circle', {
-      cx: cx, cy: cy, r: r, 'data-drag': param, class: 'dragHandle',
-      fill: 'var(--surface)', stroke: 'var(--accent)', 'stroke-width': r * 0.35
-    });
+  // A visible dot sized for legibility is usually much too small to
+  // reliably grab with a finger, so every handle gets an invisible circle
+  // sized for touch (aiming for a ~44px on-screen diameter, the standard
+  // minimum touch target) layered underneath the smaller visible mark.
+  // hitR is computed once per render from the SVG's actual on-screen
+  // pixel size, since the same viewBox unit maps to very different pixel
+  // counts on a phone vs. a desktop window.
+  function touchHitRadius(svg) {
+    const rect = svg.getBoundingClientRect();
+    const vb = svg.viewBox.baseVal;
+    if (!rect.width || !vb || !vb.width) return 0.18;
+    const pxPerUnit = rect.width / vb.width;
+    return Math.max(0.09, 22 / pxPerUnit);
   }
 
-  function diamondHandle(cx, cy, s, param) {
-    const g = el('g', { transform: 'translate(' + cx + ' ' + cy + ') rotate(45)', 'data-drag': param, class: 'dragHandle' });
-    g.appendChild(el('rect', { x: -s / 2, y: -s / 2, width: s, height: s, fill: 'var(--surface)', stroke: 'var(--guide-warn)', 'stroke-width': s * 0.2 }));
+  function circleHandle(cx, cy, r, param, hitR) {
+    const g = el('g', { transform: 'translate(' + cx + ' ' + cy + ')', 'data-drag': param, class: 'dragHandle' });
+    g.appendChild(el('circle', { cx: 0, cy: 0, r: Math.max(hitR, r), fill: 'transparent' }));
+    g.appendChild(el('circle', { cx: 0, cy: 0, r: r, fill: 'var(--surface)', stroke: 'var(--accent)', 'stroke-width': r * 0.35, 'pointer-events': 'none' }));
+    return g;
+  }
+
+  function diamondHandle(cx, cy, s, param, hitR) {
+    const g = el('g', { transform: 'translate(' + cx + ' ' + cy + ')', 'data-drag': param, class: 'dragHandle' });
+    g.appendChild(el('circle', { cx: 0, cy: 0, r: Math.max(hitR, s * 0.7), fill: 'transparent' }));
+    const inner = el('g', { transform: 'rotate(45)', 'pointer-events': 'none' });
+    inner.appendChild(el('rect', { x: -s / 2, y: -s / 2, width: s, height: s, fill: 'var(--surface)', stroke: 'var(--guide-warn)', 'stroke-width': s * 0.2 }));
+    g.appendChild(inner);
     return g;
   }
 
@@ -1114,31 +1133,32 @@
     const hs = handleState;
     const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
     const r = Math.max(vw * 0.017, 0.085);
+    const hitR = touchHitRadius(svg);
     const g = el('g', { id: 'dragHandles' });
 
-    g.appendChild(circleHandle(hs.boardWidth / 2, 0, r, 'boardWidth'));
-    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength + hs.gripLength / 2, r, 'gripWidth'));
-    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength, r, 'neckLength'));
-    g.appendChild(circleHandle(hs.gripWidth / 2, gripTop.y, r, 'gripLength'));
+    g.appendChild(circleHandle(hs.boardWidth / 2, 0, r, 'boardWidth', hitR));
+    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength + hs.gripLength / 2, r, 'gripWidth', hitR));
+    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength, r, 'neckLength', hitR));
+    g.appendChild(circleHandle(hs.gripWidth / 2, gripTop.y, r, 'gripLength', hitR));
 
     const midX = (hs.gripWidth / 2 + hs.boardWidth / 2) / 2, halfDiff = (hs.boardWidth / 2 - hs.gripWidth / 2) * 0.5;
-    g.appendChild(diamondHandle(midX - hs.neckCurve * halfDiff, hs.neckLength / 2, r * 1.5, 'neckCurve'));
+    g.appendChild(diamondHandle(midX - hs.neckCurve * halfDiff, hs.neckLength / 2, r * 1.5, 'neckCurve', hitR));
 
     if (hs.family !== 'swirl') {
-      g.appendChild(circleHandle(0, gripTop.y + hs.capDepth, r, 'capDepth'));
+      g.appendChild(circleHandle(0, gripTop.y + hs.capDepth, r, 'capDepth', hitR));
     }
     if (hs.family === 'rounded' && hs.hasHole) {
-      g.appendChild(circleHandle(hs.holeDiameter / 2, gripTop.y + hs.capDepth * 0.55, r * 0.8, 'holeDiameter'));
+      g.appendChild(circleHandle(hs.holeDiameter / 2, gripTop.y + hs.capDepth * 0.55, r * 0.8, 'holeDiameter', hitR));
     }
     if (hs.family === 'pointed') {
       const a = hs.gripWidth / 2;
-      g.appendChild(diamondHandle(a * (1 - hs.pointCurve), gripTop.y + hs.capDepth * 0.5, r * 1.5, 'pointCurve'));
+      g.appendChild(diamondHandle(a * (1 - hs.pointCurve), gripTop.y + hs.capDepth * 0.5, r * 1.5, 'pointCurve', hitR));
     }
     if (hs.family === 'cleaver') {
       const notchHalfW = Math.min(hs.notchWidth / 2, hs.gripWidth / 2 * 0.92);
       const flatY = gripTop.y + hs.capDepth;
-      g.appendChild(circleHandle(notchHalfW, flatY, r, 'notchWidth'));
-      g.appendChild(circleHandle(0, flatY - Math.min(hs.notchDepth, hs.capDepth * 0.92), r, 'notchDepth'));
+      g.appendChild(circleHandle(notchHalfW, flatY, r, 'notchWidth', hitR));
+      g.appendChild(circleHandle(0, flatY - Math.min(hs.notchDepth, hs.capDepth * 0.92), r, 'notchDepth', hitR));
     }
     if (hs.family === 'swirl') {
       const trk = swirlTrackGeometry(hs, gripTop);
@@ -1148,10 +1168,10 @@
       const fs = vw * 0.024;
       g.appendChild(el('line', { x1: trk.trackX, y1: trk.turnsY0, x2: trk.trackX, y2: trk.turnsY1, stroke: 'var(--border)', 'stroke-width': vw * 0.0025 }));
       g.appendChild(textEl({ x: trk.trackX - r * 1.6, y: trk.turnsY0 - r * 1.1, 'font-size': fs, fill: 'var(--text-muted)', 'font-family': 'sans-serif' }, 'Turns'));
-      g.appendChild(circleHandle(trk.trackX, trk.turnsY0 + turnsFrac * (trk.turnsY1 - trk.turnsY0), r * 0.85, 'curlTurns'));
+      g.appendChild(circleHandle(trk.trackX, trk.turnsY0 + turnsFrac * (trk.turnsY1 - trk.turnsY0), r * 0.85, 'curlTurns', hitR));
       g.appendChild(el('line', { x1: trk.trackX, y1: trk.tightY0, x2: trk.trackX, y2: trk.tightY1, stroke: 'var(--border)', 'stroke-width': vw * 0.0025 }));
       g.appendChild(textEl({ x: trk.trackX - r * 1.6, y: trk.tightY0 - r * 1.1, 'font-size': fs, fill: 'var(--text-muted)', 'font-family': 'sans-serif' }, 'Tight'));
-      g.appendChild(circleHandle(trk.trackX, trk.tightY0 + tightFrac * (trk.tightY1 - trk.tightY0), r * 0.85, 'curlTightness'));
+      g.appendChild(circleHandle(trk.trackX, trk.tightY0 + tightFrac * (trk.tightY1 - trk.tightY0), r * 0.85, 'curlTightness', hitR));
     }
     svg.appendChild(g);
   }
@@ -1209,7 +1229,8 @@
     const dims = document.getElementById('dims');
     const hs = handleState;
     dims.innerHTML = 'Board width: ' + hs.boardWidth.toFixed(3) + '" (' + toFraction16(hs.boardWidth) + ') &nbsp;&middot;&nbsp; ' +
-      'Grip width: ' + hs.gripWidth.toFixed(3) + '" (' + toFraction16(hs.gripWidth) + ')';
+      'Grip width: ' + hs.gripWidth.toFixed(3) + '" (' + toFraction16(hs.gripWidth) + ')' +
+      '<br><span class="dragHint">Tip: press and drag the dots on the shape to reshape it directly.</span>';
   }
 
   const HANDLE_FAMILY_NAMES = { rounded: 'Rounded', pointed: 'Pointed', cleaver: 'Cleaver Notch', swirl: 'Swirl' };
