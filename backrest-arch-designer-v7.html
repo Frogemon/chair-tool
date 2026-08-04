@@ -336,6 +336,16 @@
         <div class="hint">0 = straight taper &middot; 1 = deeply waisted/scooped</div>
       </div>
 
+      <div class="field">
+        <label for="hMidBendInput">Bend (middle) <output id="hMidBendInputVal"></output></label>
+        <input type="range" id="hMidBendInput" min="-1.5" max="1.5" step="0.0625">
+      </div>
+      <div class="field">
+        <label for="hTipBendInput">Bend (tip) <output id="hTipBendInputVal"></output></label>
+        <input type="range" id="hTipBendInput" min="-1.5" max="1.5" step="0.0625">
+        <div class="hint">Bends the whole spine sideways — the shoulder stays fixed to your board's straight edge.</div>
+      </div>
+
       <div class="field" id="hField-capDepth">
         <label for="hCapDepthInput">Cap length <output id="hCapDepthInputVal"></output></label>
         <input type="range" id="hCapDepthInput" min="0.5" max="2.5" step="0.0625">
@@ -911,7 +921,9 @@
     curlTurns: 1.1,     // swirl only
     curlTightness: 0.28, // swirl only (min radius at the core, inches)
     hasHole: true,
-    holeDiameter: 0.375
+    holeDiameter: 0.375,
+    midBend: 0,         // sideways spine offset at the grip/cap landmark, inches
+    tipBend: 0          // sideways spine offset at the tip, inches
   };
 
   const handlePresets = [
@@ -1048,6 +1060,23 @@
     return pts; // starts at (0, gripTop.y), ends just before gripTop
   }
 
+  function smoothstep01(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
+  // Bends the whole silhouette sideways along its length, rather than
+  // exposing any single dimension: two control points (mid, tip) each
+  // carry a horizontal offset, eased in from a pinned 0 at the shoulder
+  // (y=0 always stays put -- that's what has to sit flush against the
+  // straight-cut edge of the board) and held constant past the tip point.
+  // Every point in the final mirrored outline shifts by the same amount
+  // at a given height, so both sides move together and the cross-section
+  // keeps its shape -- it's the spine that bends, not the width.
+  function bendOffsetAt(y, hs, midY, tipY) {
+    if (y <= 0) return 0;
+    if (y <= midY) return hs.midBend * smoothstep01(midY > 1e-6 ? y / midY : 1);
+    const span = Math.max(tipY - midY, 1e-6);
+    return hs.midBend + (hs.tipBend - hs.midBend) * smoothstep01((y - midY) / span);
+  }
+
   function buildHandleOutline() {
     const hs = handleState;
     const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
@@ -1062,11 +1091,17 @@
     const rightPts = capPts.concat([gripTop, gripBottom]).concat(buildNeckPoints(hs));
     const outline = buildOutline(rightPts); // reuse the arch designer's generic mirror + close
 
+    const midY = gripTop.y, tipY = Math.max(computeBBox(outline.allPts).maxY, midY + 0.01);
+    const bendAt = function (y) { return bendOffsetAt(y, hs, midY, tipY); };
+    const bentPts = outline.allPts.map(function (p) { return { x: p.x + bendAt(p.y), y: p.y }; });
+    const d = pointsToOpenPath(bentPts) + ' Z';
+
     let hole = null;
     if (hs.family === 'rounded' && hs.hasHole) {
-      hole = { cx: 0, cy: gripTop.y + hs.capDepth * 0.55, r: hs.holeDiameter / 2 };
+      const hy = gripTop.y + hs.capDepth * 0.55;
+      hole = { cx: bendAt(hy), cy: hy, r: hs.holeDiameter / 2 };
     }
-    return { d: outline.d, allPts: outline.allPts, hole: hole };
+    return { d: d, allPts: bentPts, hole: hole, midY: midY, tipY: tipY };
   }
 
   function pointsToOpenPath(pts) {
@@ -1129,36 +1164,55 @@
   // aren't themselves on the curve; the swirl's two abstract parameters
   // get a small drawn slider track instead, since turns/tightness don't
   // correspond to a single point on that curve either.
-  function drawHandleControlPoints(svg, vw) {
+  function drawHandleControlPoints(svg, vw, outline) {
     const hs = handleState;
     const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
     const r = Math.max(vw * 0.017, 0.085);
     const hitR = touchHitRadius(svg);
     const g = el('g', { id: 'dragHandles' });
+    // every other handle's *displayed* x is nudged by the current bend at
+    // its height, so it still visually sits on the (now-bent) curve; only
+    // display shifts here, the drag math for those handles is unaffected
+    const bendAt = function (y) { return bendOffsetAt(y, hs, outline.midY, outline.tipY); };
+
+    // spine guide: shows the bend at a glance, from the pinned shoulder
+    // through the two bend points -- drawn first so the handles sit on top
+    g.appendChild(el('polyline', {
+      points: '0,0 ' + hs.midBend + ',' + outline.midY + ' ' + hs.tipBend + ',' + outline.tipY,
+      fill: 'none', stroke: 'var(--guide-warn)', 'stroke-width': vw * 0.0022,
+      'stroke-dasharray': (vw * 0.008) + ' ' + (vw * 0.006), opacity: 0.6
+    }));
+    g.appendChild(circleHandle(hs.midBend, outline.midY, r * 0.85, 'midBend', hitR));
+    g.appendChild(circleHandle(hs.tipBend, outline.tipY, r * 0.85, 'tipBend', hitR));
 
     g.appendChild(circleHandle(hs.boardWidth / 2, 0, r, 'boardWidth', hitR));
-    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength + hs.gripLength / 2, r, 'gripWidth', hitR));
-    g.appendChild(circleHandle(hs.gripWidth / 2, hs.neckLength, r, 'neckLength', hitR));
-    g.appendChild(circleHandle(hs.gripWidth / 2, gripTop.y, r, 'gripLength', hitR));
+    const gripWidthY = hs.neckLength + hs.gripLength / 2;
+    g.appendChild(circleHandle(bendAt(gripWidthY) + hs.gripWidth / 2, gripWidthY, r, 'gripWidth', hitR));
+    g.appendChild(circleHandle(bendAt(hs.neckLength) + hs.gripWidth / 2, hs.neckLength, r, 'neckLength', hitR));
+    g.appendChild(circleHandle(bendAt(gripTop.y) + hs.gripWidth / 2, gripTop.y, r, 'gripLength', hitR));
 
     const midX = (hs.gripWidth / 2 + hs.boardWidth / 2) / 2, halfDiff = (hs.boardWidth / 2 - hs.gripWidth / 2) * 0.5;
-    g.appendChild(diamondHandle(midX - hs.neckCurve * halfDiff, hs.neckLength / 2, r * 1.5, 'neckCurve', hitR));
+    const neckCurveY = hs.neckLength / 2;
+    g.appendChild(diamondHandle(bendAt(neckCurveY) + midX - hs.neckCurve * halfDiff, neckCurveY, r * 1.5, 'neckCurve', hitR));
 
     if (hs.family !== 'swirl') {
-      g.appendChild(circleHandle(0, gripTop.y + hs.capDepth, r, 'capDepth', hitR));
+      const capY = gripTop.y + hs.capDepth;
+      g.appendChild(circleHandle(bendAt(capY), capY, r, 'capDepth', hitR));
     }
     if (hs.family === 'rounded' && hs.hasHole) {
-      g.appendChild(circleHandle(hs.holeDiameter / 2, gripTop.y + hs.capDepth * 0.55, r * 0.8, 'holeDiameter', hitR));
+      const holeY = gripTop.y + hs.capDepth * 0.55;
+      g.appendChild(circleHandle(bendAt(holeY) + hs.holeDiameter / 2, holeY, r * 0.8, 'holeDiameter', hitR));
     }
     if (hs.family === 'pointed') {
-      const a = hs.gripWidth / 2;
-      g.appendChild(diamondHandle(a * (1 - hs.pointCurve), gripTop.y + hs.capDepth * 0.5, r * 1.5, 'pointCurve', hitR));
+      const a = hs.gripWidth / 2, pcY = gripTop.y + hs.capDepth * 0.5;
+      g.appendChild(diamondHandle(bendAt(pcY) + a * (1 - hs.pointCurve), pcY, r * 1.5, 'pointCurve', hitR));
     }
     if (hs.family === 'cleaver') {
       const notchHalfW = Math.min(hs.notchWidth / 2, hs.gripWidth / 2 * 0.92);
       const flatY = gripTop.y + hs.capDepth;
-      g.appendChild(circleHandle(notchHalfW, flatY, r, 'notchWidth', hitR));
-      g.appendChild(circleHandle(0, flatY - Math.min(hs.notchDepth, hs.capDepth * 0.92), r, 'notchDepth', hitR));
+      const notchDepthY = flatY - Math.min(hs.notchDepth, hs.capDepth * 0.92);
+      g.appendChild(circleHandle(bendAt(flatY) + notchHalfW, flatY, r, 'notchWidth', hitR));
+      g.appendChild(circleHandle(bendAt(notchDepthY), notchDepthY, r, 'notchDepth', hitR));
     }
     if (hs.family === 'swirl') {
       const trk = swirlTrackGeometry(hs, gripTop);
@@ -1222,7 +1276,7 @@
         fill: 'var(--bg)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.005
       }));
     }
-    drawHandleControlPoints(svg, vw);
+    drawHandleControlPoints(svg, vw, outline);
   }
 
   function updateHandleDims() {
@@ -1242,6 +1296,9 @@
     paras.push('Board width: ' + hs.boardWidth.toFixed(3) + '" (' + toFraction16(hs.boardWidth) + ')   Grip width: ' + hs.gripWidth.toFixed(3) + '" (' + toFraction16(hs.gripWidth) + ')');
     paras.push('SOLID line = cut line     DASHED line = shoulder — align with where your board is already cut straight');
     paras.push('Trace the solid curve onto the end of your board blank, positioning the dashed line at your board’s straight edge.');
+    if (hs.midBend !== 0 || hs.tipBend !== 0) {
+      paras.push('Spine bent ' + hs.midBend.toFixed(2) + '" at mid, ' + hs.tipBend.toFixed(2) + '" at tip.');
+    }
     paras.push(scale < 1 ? ('Scaled to ' + (scale * 100).toFixed(0) + '% to fit on one sheet — this design is unusually large for a handle.') : 'Printed at true 1:1 scale.');
     return paras;
   }
@@ -1310,8 +1367,8 @@
 
   const HANDLE_FIELD_MAP = {
     hBoardWidthInput: 'boardWidth', hGripWidthInput: 'gripWidth', hNeckLengthInput: 'neckLength',
-    hGripLengthInput: 'gripLength', hNeckCurveInput: 'neckCurve', hCapDepthInput: 'capDepth',
-    hPointCurveInput: 'pointCurve', hNotchWidthInput: 'notchWidth', hNotchDepthInput: 'notchDepth',
+    hGripLengthInput: 'gripLength', hNeckCurveInput: 'neckCurve', hMidBendInput: 'midBend', hTipBendInput: 'tipBend',
+    hCapDepthInput: 'capDepth', hPointCurveInput: 'pointCurve', hNotchWidthInput: 'notchWidth', hNotchDepthInput: 'notchDepth',
     hCurlTurnsInput: 'curlTurns', hCurlTightnessInput: 'curlTightness', hHoleDiameterInput: 'holeDiameter'
   };
 
@@ -1336,7 +1393,7 @@
     });
   }
 
-  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375 };
+  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0 };
 
   function applyHandlePreset(p) {
     Object.assign(handleState, HANDLE_DEFAULTS, p);
@@ -1491,6 +1548,22 @@
       const b = sliderBounds('hHoleDiameterInput');
       handleState.holeDiameter = clamp(p.x * 2, b.min, b.max);
       syncOneHandleControl('hHoleDiameterInput', 'holeDiameter');
+      renderHandle(true);
+    },
+    // the bend handles sit exactly at (midBend, midY) / (tipBend, tipY) by
+    // construction (bendOffsetAt returns the bend value itself at those
+    // landmark heights), so dragging just reads the new x straight off --
+    // no inversion needed, unlike the bezier-control-point handles above
+    midBend: function (p) {
+      const b = sliderBounds('hMidBendInput');
+      handleState.midBend = clamp(p.x, b.min, b.max);
+      syncOneHandleControl('hMidBendInput', 'midBend');
+      renderHandle(true);
+    },
+    tipBend: function (p) {
+      const b = sliderBounds('hTipBendInput');
+      handleState.tipBend = clamp(p.x, b.min, b.max);
+      syncOneHandleControl('hTipBendInput', 'tipBend');
       renderHandle(true);
     },
     curlTurns: function (p) {
@@ -1897,6 +1970,8 @@
     bindHandleRange('hNeckLengthInput', 'neckLength', parseFloat);
     bindHandleRange('hGripLengthInput', 'gripLength', parseFloat);
     bindHandleRange('hNeckCurveInput', 'neckCurve', parseFloat);
+    bindHandleRange('hMidBendInput', 'midBend', parseFloat);
+    bindHandleRange('hTipBendInput', 'tipBend', parseFloat);
     bindHandleRange('hCapDepthInput', 'capDepth', parseFloat);
     bindHandleRange('hPointCurveInput', 'pointCurve', parseFloat);
     bindHandleRange('hNotchWidthInput', 'notchWidth', parseFloat);
