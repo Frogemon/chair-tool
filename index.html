@@ -940,8 +940,9 @@
     loopWall: 0.55,     // loop only -- frame thickness around the finger hole
     hasHole: true,
     holeDiameter: 0.375,
-    midBend: 0,         // sideways spine offset at the grip/cap landmark, inches
-    tipBend: 0          // sideways spine offset at the tip, inches
+    midBend: 0,         // sideways spine offset at the middle bend point, inches
+    tipBend: 0,         // sideways spine offset at the tip, inches
+    bendMidPos: 0.5     // where the middle bend point sits along the spine, 0..1
   };
 
   const handlePresets = [
@@ -1111,98 +1112,87 @@
     return right.concat(left.slice(1));
   }
 
-  // Swirl/scroll: a curvature-integrated Euler-spiral curl (heading turns
-  // at a rate of 1/R(t), R shrinking from R0 to the core radius), swept as
-  // a tapering ribbon so its outer and inner edges are offset curves of
-  // the same spine. The right half's inner edge starts exactly on the
-  // centerline (0, gripTop.y), so mirroring produces a symmetric
-  // double-scroll/heart shape meeting cleanly at the center.
+  // Swirl/scroll: a classical volute. The band is bounded by two copies of
+  // the SAME logarithmic spiral offset in angle about one centre -- the way
+  // volutes have been laid out since the Renaissance. The reason that
+  // matters here is that both boundaries are then monotone spirals about a
+  // fixed centre, so the band physically cannot run into its own previous
+  // wrap provided it is narrower than one turn's radial gap. That is one
+  // inequality to satisfy, rather than the stack of empirical width clamps
+  // a normal-offset ribbon needed (and still failed at).
   //
-  // The ribbon's OWN base half-width is deliberately much narrower than
-  // the grip's half-width, bridged to the grip's actual corner with a
-  // short flat step -- not tied to it directly. A ribbon that starts at
-  // the grip's full width folds back over itself almost immediately once
-  // it starts turning (confirmed by direct self-intersection testing: a
-  // ribbon that wide crosses itself well into the visible curl, not just
-  // near the tip, however the taper is shaped or however much lead-in
-  // straight run is added first -- the fold is about the ribbon's width
-  // relative to how sharply it's turning, not how it gets there). A much
-  // narrower base avoids the fold structurally, which is what actually
-  // lets the rest of the curl stay a nice substantial thickness through
-  // the whole turn instead of being forced thin everywhere to compensate.
-  const MIN_SWIRL_HALF_WIDTH = 0.065;
+  // The band springs from the shaft's edge, coils inward for `curlTurns`
+  // turns and closes in a round eye. The two mirrored scrolls are joined
+  // across the centreline by a shallow dip, so the shaft flows into both of
+  // them instead of ending in a flat face with a notch stranded underneath.
+  const SWIRL_BAND_FRAC = 0.45;   // band width as a fraction of the local radius
+  const SWIRL_COIL_CLEAR = 1.25;  // margin on the coil-to-coil gap
+  const SWIRL_SIDE_CLEAR = 0.95;  // keeps each scroll off the centreline
+  const SWIRL_DIP_FRAC = 0.32;    // depth of the joining dip (fraction of half the shaft)
+
+  function swirlGeometry(hs, gripTop) {
+    const gripHalf = hs.gripWidth / 2;
+    const totalTurn = Math.max(hs.curlTurns, 0.4) * Math.PI * 2;
+    const f = SWIRL_BAND_FRAC;
+    // decay rate must be steep enough that one turn opens a gap wider than
+    // the band itself, else consecutive coils would touch
+    const bMin = -Math.log(1 - f) / (2 * Math.PI) * SWIRL_COIL_CLEAR;
+    const eyeWanted = Math.max(hs.curlTightness, 0.05);
+    const R0raw = Math.min(Math.max(hs.gripWidth * 1.0, 0.7), gripTop.y * 0.55);
+    const b = Math.max(Math.log(Math.max(R0raw / eyeWanted, 1.05)) / totalTurn, bMin);
+    // how far left the spiral reaches per unit of R0, so R0 can be capped to
+    // keep each scroll on its own side of the centreline
+    let minXUnit = 0;
+    for (let i = 0; i <= 400; i++) {
+      const th = totalTurn * i / 400;
+      minXUnit = Math.min(minXUnit, Math.exp(-b * th) * Math.sin(th));
+    }
+    const R0cap = minXUnit < -1e-6 ? gripHalf / (-minXUnit) * SWIRL_SIDE_CLEAR : Infinity;
+    const R0 = Math.min(R0raw, R0cap, hs.gripLength * 0.85 / f);
+    return {
+      gripHalf: gripHalf, totalTurn: totalTurn, f: f, b: b, R0: R0,
+      cx: gripHalf, cy: gripTop.y + R0,
+      endY: gripTop.y + R0 * f, drop: gripHalf * SWIRL_DIP_FRAC
+    };
+  }
 
   function buildSwirlCap(hs, gripTop) {
-    const halfWidth0 = Math.max(hs.gripWidth * 0.02, MIN_SWIRL_HALF_WIDTH);
-    const gripHalf = hs.gripWidth / 2;
-    // the curl's opening arc swings up by roughly R0 before it turns back
-    // down into the coil -- with a wide grip (big R0) but little headroom
-    // above it (short neck+grip), that arc can swing back up past the
-    // shoulder line (y=0), which isn't cuttable. Cap R0 against the actual
-    // headroom available so the loop always has room to open and close
-    // before reaching the shoulder.
-    const R0 = Math.min(Math.max(hs.gripWidth * 1.15, 0.75), gripTop.y * 0.6);
-    const Rmin = Math.min(Math.max(hs.curlTightness, 0.08), R0 * 0.6);
-    const totalTurn = hs.curlTurns * Math.PI * 2;
-    const ds = 0.02;
-    // logarithmic (equiangular) decay, not linear: radius shrinks by a
-    // constant RATIO per unit of turning rather than a constant amount,
-    // which is what nautilus shells and fern fiddleheads actually do --
-    // it starts gentle and self-similar, then tightens increasingly fast
-    // toward the core, reading as hand-carved rather than a uniform
-    // mechanical coil of rope (which a linear/Archimedean decay gives)
-    const k = Math.log(R0 / Rmin);
+    const g = swirlGeometry(hs, gripTop);
+    const P = function (th, r) { return { x: g.cx + r * Math.sin(th), y: g.cy - r * Math.cos(th) }; };
+    const steps = Math.max(80, Math.round(g.totalTurn * 40));
 
-    const spine = [];
-    let x = halfWidth0, y = gripTop.y, heading = 0, turned = 0;
-    spine.push({ x: x, y: y, heading: heading, hw: halfWidth0 });
-    while (turned < totalTurn) {
-      const t = turned / totalTurn;
-      const R = R0 * Math.exp(-k * t);
-      const dHeading = ds / R;
-      heading += dHeading;
-      turned += dHeading;
-      // curl away from the centerline first (+x), not across it -- the
-      // right half's spiral must stay on its own side so the mirrored
-      // pair doesn't cross itself where they meet the grip
-      x += Math.sin(heading) * ds;
-      y += -Math.cos(heading) * ds;
-      // gentle taper, staying substantial through most of the curl and
-      // only really thinning near the very tip -- eased via smoothstep
-      // (zero derivative at t=0) so the tangent at the centerline meeting
-      // point, where the mirrored curls join, is still exactly vertical.
-      // Floored well short of zero -- a line that tapers all the way to
-      // a hairline isn't something you can actually see on a printed
-      // template or safely cut and sand out of wood, so the curl's tail
-      // keeps a real, cuttable thickness instead of vanishing to a point.
-      let hw = halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(t)), 0.8);
-      hw = Math.min(hw, R * 0.72);
-      hw = Math.max(hw, MIN_SWIRL_HALF_WIDTH);
-      spine.push({ x: x, y: y, heading: heading, hw: hw });
+    const outer = [], inner = [];
+    for (let i = 0; i <= steps; i++) {
+      const th = g.totalTurn * i / steps, r = g.R0 * Math.exp(-g.b * th);
+      outer.push(P(th, r));
+      inner.push(P(th, r * (1 - g.f)));
     }
-
-    const outer = spine.map(function (p) {
-      const nx = Math.cos(p.heading), ny = -Math.sin(p.heading);
-      return { x: p.x + nx * p.hw, y: p.y + ny * p.hw };
-    });
-    const inner = spine.map(function (p) {
-      const nx = Math.cos(p.heading), ny = -Math.sin(p.heading);
-      return { x: p.x - nx * p.hw, y: p.y - ny * p.hw };
-    });
-
-    const pts = inner.slice();
-    const pA = inner[inner.length - 1], pB = outer[outer.length - 1], capSteps = 8;
-    for (let k = 1; k < capSteps; k++) {
-      const t = k / capSteps;
-      pts.push({ x: pA.x + (pB.x - pA.x) * t, y: pA.y + (pB.y - pA.y) * t });
+    // eye: a round cap closing the band at its inner terminus, swept from
+    // the inner edge round to the outer edge -- i.e. the same direction the
+    // path is already travelling, so it joins on without doubling back
+    const rE = g.R0 * Math.exp(-g.b * g.totalTurn);
+    const eyeC = P(g.totalTurn, rE * (1 - g.f / 2)), eyeR = rE * g.f / 2;
+    const cap = [];
+    for (let i = 1; i < 16; i++) {
+      const a = g.totalTurn + Math.PI * (1 - i / 16);
+      cap.push({ x: eyeC.x + eyeR * Math.sin(a), y: eyeC.y - eyeR * Math.cos(a) });
     }
-    for (let i = outer.length - 1; i >= 1; i--) pts.push(outer[i]);
-    // short flat step bridging the curl's own (narrower) outer edge up
-    // to the grip's actual corner, so the outline still closes cleanly
-    // against the grip with no gap
-    pts.push({ x: gripHalf, y: gripTop.y });
-    return pts; // starts at (0, gripTop.y), ends at the grip corner
+    // the dip that carries the shape across to its mirror image
+    const bridge = [];
+    const B0 = { x: 0, y: g.endY + g.drop }, B2 = { x: g.gripHalf, y: g.endY };
+    const Bc = { x: g.gripHalf * 0.45, y: g.endY + g.drop * 0.75 };
+    for (let i = 0; i <= 24; i++) {
+      const t = i / 24, mt = 1 - t;
+      bridge.push({ x: mt * mt * B0.x + 2 * mt * t * Bc.x + t * t * B2.x, y: mt * mt * B0.y + 2 * mt * t * Bc.y + t * t * B2.y });
+    }
+    // centreline dip -> inner spiral inward -> eye -> outer spiral back out,
+    // finishing on the shaft's edge at the point the band springs from
+    return bridge.concat(inner).concat(cap).concat(outer.slice().reverse());
   }
+
+  // last rendered tip height + handle offset gap, so the drag handlers can
+  // undo exactly what the drawing code applied
+  let bendFrameTipY = 1, handleOffsetGap = 0;
 
   function smoothstep01(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
 
@@ -1214,11 +1204,25 @@
   // Every point in the final mirrored outline shifts by the same amount
   // at a given height, so both sides move together and the cross-section
   // keeps its shape -- it's the spine that bends, not the width.
+  // A natural cubic spline through the three control heights rather than a
+  // pair of smoothsteps. Smoothstep has ZERO slope at both of its ends, so
+  // chaining two of them forced the spine flat at the shoulder, flat again
+  // at the middle point, and flat at the tip -- the bend had to do all its
+  // turning in between, which is what read as sharp/wavy. A natural spline
+  // is curvature-continuous across the middle point, so the whole spine is
+  // one smooth arc.
   function bendOffsetAt(y, hs, midY, tipY) {
     if (y <= 0) return 0;
-    if (y <= midY) return hs.midBend * smoothstep01(midY > 1e-6 ? y / midY : 1);
-    const span = Math.max(tipY - midY, 1e-6);
-    return hs.midBend + (hs.tipBend - hs.midBend) * smoothstep01((y - midY) / span);
+    const v1 = hs.midBend, v2 = hs.tipBend;
+    const h0 = Math.max(midY, 1e-6), h1 = Math.max(tipY - midY, 1e-6);
+    // second derivative at the interior knot; zero at both ends (natural)
+    const M1 = 6 * ((v2 - v1) / h1 - v1 / h0) / (2 * (h0 + h1));
+    if (y <= midY) {
+      return v1 * (y / h0) + (M1 / 6) * (y * y * y / h0 - h0 * y);
+    }
+    if (y >= tipY) return v2; // hold past the tip
+    const d = tipY - y, e = y - midY;
+    return v1 * (d / h1) + v2 * (e / h1) + (M1 / 6) * (d * d * d / h1 - h1 * d);
   }
 
   function buildHandleOutline() {
@@ -1233,10 +1237,16 @@
     else if (hs.family === 'loop') capPts = buildLoopCap(hs, gripTop);
     else capPts = buildSwirlCap(hs, gripTop);
 
-    const rightPts = capPts.concat([gripTop, gripBottom]).concat(buildNeckPoints(hs));
+    // the volute's band springs from partway down the shaft's edge, so its
+    // cap already finishes below gripTop -- inserting gripTop there would
+    // double the path back up over itself
+    const rightPts = (hs.family === 'swirl' ? capPts.concat([gripBottom]) : capPts.concat([gripTop, gripBottom]))
+      .concat(buildNeckPoints(hs));
     const outline = buildOutline(rightPts); // reuse the arch designer's generic mirror + close
 
-    const midY = gripTop.y, tipY = Math.max(computeBBox(outline.allPts).maxY, midY + 0.01);
+    const tipY = Math.max(computeBBox(outline.allPts).maxY, 0.02);
+    bendFrameTipY = tipY;
+    const midY = clamp(tipY * hs.bendMidPos, tipY * 0.08, tipY * 0.92);
     const bendAt = function (y) { return bendOffsetAt(y, hs, midY, tipY); };
     const bentPts = outline.allPts.map(function (p) { return { x: p.x + bendAt(p.y), y: p.y }; });
     const d = pointsToOpenPath(bentPts) + ' Z';
@@ -1332,8 +1342,16 @@
 
     // spine guide: shows the bend at a glance, from the pinned shoulder
     // through the two bend points -- drawn first so the handles sit on top
+    // sample the actual bend curve rather than connecting the three control
+    // points with straight lines -- a straight guide reads as a kinked spine
+    // even when the shape itself is following a smooth spline
+    const guidePts = [];
+    for (let i = 0; i <= 40; i++) {
+      const gy = outline.tipY * i / 40;
+      guidePts.push(bendAt(gy).toFixed(3) + ',' + gy.toFixed(3));
+    }
     g.appendChild(el('polyline', {
-      points: '0,0 ' + hs.midBend + ',' + outline.midY + ' ' + hs.tipBend + ',' + outline.tipY,
+      points: guidePts.join(' '),
       fill: 'none', stroke: 'var(--guide-warn)', 'stroke-width': vw * 0.0022,
       'stroke-dasharray': (vw * 0.008) + ' ' + (vw * 0.006), opacity: 0.6
     }));
@@ -1341,8 +1359,18 @@
     g.appendChild(circleHandle(hs.tipBend, outline.tipY, r * 0.85, 'tipBend', hitR));
 
     g.appendChild(circleHandle(hs.boardWidth / 2, 0, r, 'boardWidth', hitR));
+    // grip-width sat on the shaft edge directly between the neck-length and
+    // grip-length handles, so all three stacked on one line. Stand it off the
+    // edge with a leader line instead.
+    const gap = Math.max(vw * 0.05, 0.26);
+    handleOffsetGap = gap;
     const gripWidthY = hs.neckLength + hs.gripLength / 2;
-    g.appendChild(circleHandle(bendAt(gripWidthY) + hs.gripWidth / 2, gripWidthY, r, 'gripWidth', hitR));
+    const gwX = bendAt(gripWidthY) + hs.gripWidth / 2;
+    g.appendChild(el('line', {
+      x1: gwX, y1: gripWidthY, x2: gwX + gap, y2: gripWidthY,
+      stroke: 'var(--border)', 'stroke-width': vw * 0.002
+    }));
+    g.appendChild(circleHandle(gwX + gap, gripWidthY, r, 'gripWidth', hitR));
     g.appendChild(circleHandle(bendAt(hs.neckLength) + hs.gripWidth / 2, hs.neckLength, r, 'neckLength', hitR));
     g.appendChild(circleHandle(bendAt(gripTop.y) + hs.gripWidth / 2, gripTop.y, r, 'gripLength', hitR));
 
@@ -1359,7 +1387,8 @@
       g.appendChild(circleHandle(bendAt(lg.yTop), lg.yTop, r, 'loopLength', hitR));
       g.appendChild(circleHandle(bendAt(lg.yw) + lg.a, lg.yw, r, 'loopWidth', hitR));
       if (lg.hasHole) {
-        g.appendChild(circleHandle(bendAt(lg.yw) + lg.a - lg.wall, lg.yw, r * 0.8, 'loopWall', hitR));
+        const wallY = lg.yTop - lg.wall;
+        g.appendChild(circleHandle(bendAt(wallY), wallY, r * 0.8, 'loopWall', hitR));
       }
     }
     if (hs.family === 'rounded' && hs.hasHole) {
@@ -1571,7 +1600,7 @@
     });
   }
 
-  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55 };
+  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0, bendMidPos: 0.5, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55 };
 
   function applyHandlePreset(p) {
     Object.assign(handleState, HANDLE_DEFAULTS, p);
@@ -1674,7 +1703,8 @@
     },
     gripWidth: function (p) {
       const b = sliderBounds('hGripWidthInput');
-      handleState.gripWidth = clamp(p.x * 2, b.min, b.max);
+      // the handle stands off the shaft edge by handleOffsetGap, so undo that
+      handleState.gripWidth = clamp((p.x - handleOffsetGap) * 2, b.min, b.max);
       syncOneHandleControl('hGripWidthInput', 'gripWidth');
       renderHandle(true);
     },
@@ -1743,6 +1773,8 @@
     midBend: function (p) {
       const b = sliderBounds('hMidBendInput');
       handleState.midBend = clamp(p.x, b.min, b.max);
+      // sideways sets the bend amount, along-the-spine sets where it bends
+      handleState.bendMidPos = clamp(p.y / Math.max(bendFrameTipY, 1e-6), 0.08, 0.92);
       syncOneHandleControl('hMidBendInput', 'midBend');
       renderHandle(true);
     },
@@ -1769,9 +1801,9 @@
       const hs = handleState;
       const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
       const b = sliderBounds('hLoopWallInput');
-      // the handle sits at the hole's edge, so the wall is the gap back
-      // out to the loop's outer edge at that same height
-      hs.loopWall = clamp(loopGeometry(hs, gripTop).a - p.x, b.min, b.max);
+      // handle sits at the bottom of the hole on the centreline, so the wall
+      // is the distance from there back to the loop's far end
+      hs.loopWall = clamp((gripTop.y + hs.loopLength) - p.y, b.min, b.max);
       syncOneHandleControl('hLoopWallInput', 'loopWall');
       renderHandle(true);
     },
