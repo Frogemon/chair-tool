@@ -1005,21 +1005,26 @@
   // at a rate of 1/R(t), R shrinking from R0 to the core radius), swept as
   // a tapering ribbon so its outer and inner edges are offset curves of
   // the same spine. The right half's inner edge starts exactly on the
-  // centerline (0, gripTop.y) and the outer edge starts exactly at the
-  // grip's corner, so mirroring produces a symmetric double-scroll/heart
-  // shape meeting cleanly at the center, same as the other three families.
-  // Floor on the swirl ribbon's half-width so the curl's tail keeps a
-  // real, cuttable thickness (~0.13" finished, comfortably above the
-  // ~1/8" that's a normal safe minimum for a thin scroll-saw detail)
-  // instead of tapering to a hairline. Kept below 0.72 * the tightest
-  // radius the "curl tightness" slider allows (min 0.1", so 0.072" here)
-  // so it never forces the ribbon wider than its own local curvature --
-  // that's exactly the condition that reintroduces the self-crossing
-  // the lead-in run above was built to avoid.
+  // centerline (0, gripTop.y), so mirroring produces a symmetric
+  // double-scroll/heart shape meeting cleanly at the center.
+  //
+  // The ribbon's OWN base half-width is deliberately much narrower than
+  // the grip's half-width, bridged to the grip's actual corner with a
+  // short flat step -- not tied to it directly. A ribbon that starts at
+  // the grip's full width folds back over itself almost immediately once
+  // it starts turning (confirmed by direct self-intersection testing: a
+  // ribbon that wide crosses itself well into the visible curl, not just
+  // near the tip, however the taper is shaped or however much lead-in
+  // straight run is added first -- the fold is about the ribbon's width
+  // relative to how sharply it's turning, not how it gets there). A much
+  // narrower base avoids the fold structurally, which is what actually
+  // lets the rest of the curl stay a nice substantial thickness through
+  // the whole turn instead of being forced thin everywhere to compensate.
   const MIN_SWIRL_HALF_WIDTH = 0.065;
 
   function buildSwirlCap(hs, gripTop) {
-    const halfWidth0 = hs.gripWidth / 4;
+    const halfWidth0 = Math.max(hs.gripWidth * 0.02, MIN_SWIRL_HALF_WIDTH);
+    const gripHalf = hs.gripWidth / 2;
     // the curl's opening arc swings up by roughly R0 before it turns back
     // down into the coil -- with a wide grip (big R0) but little headroom
     // above it (short neck+grip), that arc can swing back up past the
@@ -1039,31 +1044,8 @@
     const k = Math.log(R0 / Rmin);
 
     const spine = [];
-    let x = hs.gripWidth / 4, y = gripTop.y, heading = 0, turned = 0;
+    let x = halfWidth0, y = gripTop.y, heading = 0, turned = 0;
     spine.push({ x: x, y: y, heading: heading, hw: halfWidth0 });
-
-    // Short straight lead-in before any turning starts: the ribbon is at
-    // its full grip-matched width right where it leaves the grip, and a
-    // curve that thick relative to the curl's own radius will fold back
-    // on itself almost immediately once it starts turning -- the outer
-    // edge's opening sweep re-crosses the inner edge a little further
-    // along, showing up as a thin self-intersecting sliver right at the
-    // base of the curl. A brief zero-curvature run gives the ribbon room
-    // to taper down to a safe width first, since a straight offset can't
-    // self-cross. (Eased same as the main taper, so the tangent at the
-    // centerline meeting point -- where the mirrored curls join -- is
-    // still exactly vertical.)
-    const leadIn = 0.15, leadStep = ds;
-    let leadLen = 0;
-    while (leadLen < leadIn) {
-      leadLen += leadStep;
-      y += -leadStep;
-      const lt = leadLen / leadIn;
-      const hw = Math.max(halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(lt)), 3), MIN_SWIRL_HALF_WIDTH);
-      spine.push({ x: x, y: y, heading: 0, hw: hw });
-    }
-    const hwAfterLeadIn = spine[spine.length - 1].hw;
-
     while (turned < totalTurn) {
       const t = turned / totalTurn;
       const R = R0 * Math.exp(-k * t);
@@ -1075,13 +1057,15 @@
       // pair doesn't cross itself where they meet the grip
       x += Math.sin(heading) * ds;
       y += -Math.cos(heading) * ds;
-      // eased taper (not linear): thins gradually at first, then faster
-      // near the tip, tapering to a fine point rather than a blunt end.
+      // gentle taper, staying substantial through most of the curl and
+      // only really thinning near the very tip -- eased via smoothstep
+      // (zero derivative at t=0) so the tangent at the centerline meeting
+      // point, where the mirrored curls join, is still exactly vertical.
       // Floored well short of zero -- a line that tapers all the way to
       // a hairline isn't something you can actually see on a printed
       // template or safely cut and sand out of wood, so the curl's tail
       // keeps a real, cuttable thickness instead of vanishing to a point.
-      let hw = hwAfterLeadIn * Math.pow(Math.max(0, 1 - smoothstep01(t)), 1.4);
+      let hw = halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(t)), 0.8);
       hw = Math.min(hw, R * 0.72);
       hw = Math.max(hw, MIN_SWIRL_HALF_WIDTH);
       spine.push({ x: x, y: y, heading: heading, hw: hw });
@@ -1103,7 +1087,11 @@
       pts.push({ x: pA.x + (pB.x - pA.x) * t, y: pA.y + (pB.y - pA.y) * t });
     }
     for (let i = outer.length - 1; i >= 1; i--) pts.push(outer[i]);
-    return pts; // starts at (0, gripTop.y), ends just before gripTop
+    // short flat step bridging the curl's own (narrower) outer edge up
+    // to the grip's actual corner, so the outline still closes cleanly
+    // against the grip with no gap
+    pts.push({ x: gripHalf, y: gripTop.y });
+    return pts; // starts at (0, gripTop.y), ends at the grip corner
   }
 
   function smoothstep01(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
