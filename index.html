@@ -1061,7 +1061,7 @@
     const a = Math.max(hs.loopWidth / 2, w0 + 0.08); // loop is never narrower than the shaft it grows from
     const y0 = gripTop.y, yTop = y0 + hs.loopLength;
     const yw = y0 + hs.loopLength * LOOP_SHOULDER;
-    const wallMax = Math.min(a - MIN_HOLE_HALF, hs.loopLength - MIN_HOLE_HALF * 2 - 0.05);
+    const wallMax = Math.min(a - MIN_HOLE_HALF, hs.loopLength - MIN_HOLE_HALF * 2);
     const wall = Math.min(hs.loopWall, Math.max(wallMax, 0.02));
     return { w0: w0, a: a, y0: y0, yTop: yTop, yw: yw, wall: wall, hasHole: wallMax >= 0.08 };
   }
@@ -1091,23 +1091,62 @@
   // The finger hole: a closed rounded opening inset inside the loop head,
   // sitting on top of the solid shaft. Returned as a full closed loop of
   // points (both halves) since it isn't mirrored by buildOutline.
+  // Last-resort guarantee on the frame. Even with the hole built parallel
+  // to the outer profile, an extreme aspect ratio (a very wide, very short
+  // loop) bends the two curves differently enough to pinch the frame. Rather
+  // than forbid those shapes, measure what the frame actually came out to and
+  // shrink the hole toward its own centre until there is a cuttable amount of
+  // wood everywhere. A smaller hole is the right answer for such a loop.
+  function clearHole(holePts, outerPts, minWall) {
+    let cx = 0, cy = 0;
+    for (let i = 0; i < holePts.length; i++) { cx += holePts[i].x; cy += holePts[i].y; }
+    cx /= holePts.length; cy /= holePts.length;
+    let pts = holePts;
+    for (let iter = 0; iter < 6; iter++) {
+      let m = Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = 0; j < outerPts.length; j++) {
+          const dx = pts[i].x - outerPts[j].x, dy = pts[i].y - outerPts[j].y;
+          const d = dx * dx + dy * dy;
+          if (d < m) m = d;
+        }
+      }
+      m = Math.sqrt(m);
+      if (m >= minWall) break;
+      const k = Math.max(0.6, m / minWall * 0.85 + 0.1);
+      pts = pts.map(function (p) { return { x: cx + (p.x - cx) * k, y: cy + (p.y - cy) * k }; });
+    }
+    return pts;
+  }
+
   function buildLoopHole(hs, gripTop) {
     const g = loopGeometry(hs, gripTop);
     if (!g.hasHole) return null;
+    // Built with the SAME two-cubic construction as the outer silhouette,
+    // with every dimension pulled in by the wall thickness -- so the two
+    // curves stay parallel and the frame is an even thickness all the way
+    // round. The hole used to be an independently-shaped oval, which meant
+    // it and the outer profile were different curves that could wander
+    // toward each other and pinch the frame to nothing regardless of what
+    // thickness was asked for.
+    const w0i = Math.max(g.w0 - g.wall, 0);
     const ai = g.a - g.wall;
-    const yhb = g.y0, yht = g.yTop - g.wall;
-    const ywi = yhb + (yht - yhb) * 0.5;
-    const lower = cubicPoints(
-      { x: 0, y: yhb },
-      { x: ai * BEZ_K, y: yhb },
-      { x: ai, y: ywi - (ywi - yhb) * BEZ_K },
-      { x: ai, y: ywi }, 26);
-    const upper = cubicPoints(
-      { x: ai, y: ywi },
-      { x: ai, y: ywi + (yht - ywi) * BEZ_K },
-      { x: ai * BEZ_K, y: yht },
-      { x: 0, y: yht }, 26);
-    const right = lower.concat(upper.slice(1));
+    const yTi = g.yTop - g.wall;
+    const yw = Math.min(g.yw, yTi - 0.05);
+    const dyA = yw - g.y0, dyB = yTi - yw;
+    const flare = cubicPoints(
+      { x: w0i, y: g.y0 },
+      { x: w0i, y: g.y0 + dyA * 0.55 },
+      { x: ai, y: yw - dyA * 0.55 },
+      { x: ai, y: yw }, 26);
+    const dome = cubicPoints(
+      { x: ai, y: yw },
+      { x: ai, y: yw + dyB * BEZ_K },
+      { x: ai * BEZ_K, y: yTi },
+      { x: 0, y: yTi }, 26);
+    // closes across the top at the shaft junction, where the solid shaft
+    // itself is the material above the hole
+    const right = flare.concat(dome.slice(1));
     const left = right.slice().reverse().map(function (p) { return { x: -p.x, y: p.y }; });
     return right.concat(left.slice(1));
   }
@@ -1260,8 +1299,9 @@
     // same bend applied so it stays centred inside the frame when bent
     let holePts = null, holeD = null;
     if (hs.family === 'loop') {
-      const raw = buildLoopHole(hs, gripTop);
+      let raw = buildLoopHole(hs, gripTop);
       if (raw) {
+        raw = clearHole(raw, outline.allPts, Math.max(0.12, hs.loopWall * 0.55));
         holePts = raw.map(function (p) { return { x: p.x + bendAt(p.y), y: p.y }; });
         holeD = pointsToOpenPath(holePts) + ' Z';
       }
