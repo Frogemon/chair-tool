@@ -83,10 +83,32 @@
   #hamburgerBtn span { display: block; width: 16px; height: 2px; background: var(--text); border-radius: 1px; }
   #hamburgerBtn:hover, #hamburgerBtn[aria-expanded="true"] { border-color: var(--accent); }
   #toolMenu {
-    display: flex; flex-direction: column; gap: 6px; margin: 0 0 16px;
-    padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-alt);
+    display: flex; flex-direction: column; gap: 6px;
+    margin: 0; padding: 0 8px; border: 1px solid transparent; border-radius: 10px;
+    background: var(--surface-alt); overflow: hidden;
+    max-height: 0; opacity: 0; visibility: hidden; transform: translateY(-8px);
+    transition: max-height .34s var(--ease), opacity .2s var(--ease), transform .34s var(--ease),
+                margin-bottom .34s var(--ease), padding .34s var(--ease),
+                border-color .34s var(--ease), visibility 0s .36s;
   }
-  #toolMenu[hidden] { display: none; }
+  #toolMenu.open {
+    max-height: 220px; opacity: 1; visibility: visible; transform: none;
+    margin-bottom: 16px; padding: 8px; border-color: var(--border);
+    transition: max-height .34s var(--ease), opacity .2s var(--ease), transform .34s var(--ease),
+                margin-bottom .34s var(--ease), padding .34s var(--ease),
+                border-color .34s var(--ease), visibility 0s 0s;
+  }
+  #toolMenu .toolMenuItem { opacity: 0; transform: translateY(-6px);
+    transition: opacity .24s var(--ease), transform .24s var(--ease), background-color .16s var(--ease); }
+  #toolMenu.open .toolMenuItem { opacity: 1; transform: none; }
+  #toolMenu.open .toolMenuItem:nth-child(1) { transition-delay: .07s; }
+  #toolMenu.open .toolMenuItem:nth-child(2) { transition-delay: .13s; }
+  #toolMenu.open .toolMenuItem:nth-child(3) { transition-delay: .19s; }
+  /* bars fold into an X while the menu is open */
+  #hamburgerBtn span { transition: transform .3s var(--ease), opacity .18s var(--ease); }
+  #hamburgerBtn[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  #hamburgerBtn[aria-expanded="true"] span:nth-child(2) { opacity: 0; transform: scaleX(.3); }
+  #hamburgerBtn[aria-expanded="true"] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
   .toolMenuItem {
     text-align: left; padding: 9px 10px; font-size: 13px; border: 1px solid transparent;
     background: transparent; color: var(--text); border-radius: 7px; cursor: pointer;
@@ -304,6 +326,53 @@
     *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
   }
 
+  
+  /* ---------- animated dropdowns (native select stays, hidden, as the source of truth) ---------- */
+  .nativeSel { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+  .selWrap { position: relative; margin-bottom: 14px; }
+  .selBtn {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 11px; font-size: 13px; font-family: inherit; color: var(--text); text-align: left;
+    background: var(--surface-alt); border: 1px solid var(--border); border-radius: 9px; cursor: pointer;
+  }
+  .selBtn:hover { border-color: var(--accent); }
+  .selChev { width: 12px; height: 8px; flex-shrink: 0; color: var(--text-muted);
+    transition: transform .28s var(--ease), color .2s var(--ease); }
+  .selBtn[aria-expanded="true"] { border-color: var(--accent); }
+  .selBtn[aria-expanded="true"] .selChev { transform: rotate(180deg); color: var(--accent); }
+  .selPanel {
+    /* fixed, and positioned by script: an absolutely positioned panel is
+       clipped by the scrolling controls column on short screens */
+    position: fixed; z-index: 90; max-height: min(320px, 52vh); overflow-y: auto;
+    display: flex; flex-direction: column; gap: 2px; padding: 5px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow-md);
+    opacity: 0; visibility: hidden; transform: translateY(-8px) scale(.97); transform-origin: top center;
+    transition: opacity .2s var(--ease), transform .26s var(--ease), visibility 0s .26s;
+  }
+  .selPanel.open { opacity: 1; visibility: visible; transform: none;
+    transition: opacity .2s var(--ease), transform .26s var(--ease), visibility 0s 0s; }
+  .selItem {
+    text-align: left; padding: 8px 10px; font-size: 13px; border: none; background: transparent;
+    color: var(--text); border-radius: 7px; cursor: pointer;
+    opacity: 0; transform: translateY(-5px);
+    transition: opacity .2s var(--ease), transform .2s var(--ease), background-color .15s var(--ease);
+  }
+  .selPanel.open .selItem { opacity: 1; transform: none; }
+  .selPanel.open .selItem:nth-child(1) { transition-delay: .03s; }
+  .selPanel.open .selItem:nth-child(2) { transition-delay: .06s; }
+  .selPanel.open .selItem:nth-child(3) { transition-delay: .09s; }
+  .selPanel.open .selItem:nth-child(4) { transition-delay: .12s; }
+  .selPanel.open .selItem:nth-child(5) { transition-delay: .15s; }
+  .selPanel.open .selItem:nth-child(6) { transition-delay: .18s; }
+  .selPanel.open .selItem:nth-child(n+7) { transition-delay: .21s; }
+  .selItem:hover { background: var(--surface-alt); }
+  .selItem.active { background: var(--accent); color: var(--accent-contrast); font-weight: 600; }
+
+  /* family-specific fields ease in when they appear */
+  @keyframes fieldIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+  [id^="hField-"] { animation: fieldIn .26s var(--ease); }
+
   </style>
 </head>
 <body>
@@ -319,7 +388,7 @@
       </div>
     </div>
 
-    <div id="toolMenu" hidden>
+    <div id="toolMenu">
       <button type="button" class="toolMenuItem" data-tool="arch">Backrest Arch Designer</button>
       <button type="button" class="toolMenuItem" data-tool="handle">Handle Maker</button>
     </div>
@@ -986,6 +1055,7 @@
 
   function render() {
     refreshRangeFills();
+    refreshCustomSelects();
     const shape = computeShape();
     let rightPts = sampleSpine(shape.halfW, shape.h, 220);
     if (state.foiled) rightPts = applyFoilCusps(rightPts, shape.halfW, state.lobes);
@@ -1694,6 +1764,7 @@
     drawHandlePreview(outline);
     updateHandleDims();
     refreshRangeFills();
+    refreshCustomSelects();
     if (!skipPrint) buildHandlePrintSheet();
   }
 
@@ -1847,6 +1918,116 @@
   // geometry functions use to place it, so the handle and the slider
   // always agree.
   // ---------------------------------------------------------------
+
+
+  // ---------------------------------------------------------------
+  // Animated dropdowns. Browsers give no control over a native select's
+  // popup, so the select itself stays in the DOM as the single source of
+  // truth -- every existing code path that reads .value / .selectedIndex /
+  // .options or rebuilds the list keeps working untouched -- and this
+  // draws a listbox over it that can actually animate.
+  // ---------------------------------------------------------------
+  function closeAllSelects(except) {
+    document.querySelectorAll('.selWrap').forEach(function (w) { if (w !== except && w._close) w._close(); });
+  }
+
+  function enhanceSelect(sel) {
+    if (!sel || sel.classList.contains('nativeSel')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'selWrap';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('nativeSel');
+    sel.setAttribute('tabindex', '-1');
+    sel.setAttribute('aria-hidden', 'true');
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'selBtn';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<span class="selLabel"></span>' +
+      '<svg class="selChev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5 6 6.5 11 1.5" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const panel = document.createElement('div');
+    panel.className = 'selPanel';
+    panel.setAttribute('role', 'listbox');
+    wrap.appendChild(btn);
+    wrap.appendChild(panel);
+
+    wrap._close = function () { panel.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); };
+    // the panel is fixed-position, so it has to be placed against the
+    // button each time it opens -- and flipped above it when the button is
+    // near the bottom of the window
+    function place() {
+      const r = btn.getBoundingClientRect();
+      panel.style.left = Math.round(r.left) + 'px';
+      panel.style.width = Math.round(r.width) + 'px';
+      panel.style.top = '0px';
+      const ph = Math.min(panel.scrollHeight + 10, Math.min(320, window.innerHeight * 0.52));
+      const below = window.innerHeight - r.bottom;
+      if (below < ph + 12 && r.top > below) {
+        panel.style.top = Math.max(8, r.top - ph - 6) + 'px';
+        panel.style.transformOrigin = 'bottom center';
+      } else {
+        panel.style.top = Math.round(r.bottom + 6) + 'px';
+        panel.style.transformOrigin = 'top center';
+      }
+    }
+    function open() {
+      closeAllSelects(wrap);
+      place();
+      panel.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    wrap._isOpen = function () { return panel.classList.contains('open'); };
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (panel.classList.contains('open')) wrap._close(); else open();
+    });
+    btn.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') wrap._close();
+    });
+
+    wrap._refresh = function () {
+      const opts = Array.prototype.slice.call(sel.options);
+      const label = sel.selectedIndex >= 0 && sel.options[sel.selectedIndex]
+        ? sel.options[sel.selectedIndex].textContent : 'Custom';
+      btn.querySelector('.selLabel').textContent = label;
+      // only rebuild when the list or selection actually changed, so the
+      // open/close animation isn't restarted by unrelated re-renders
+      const sig = opts.map(function (op) { return op.textContent; }).join('\u0001') + '|' + sel.selectedIndex;
+      if (wrap._sig === sig) return;
+      wrap._sig = sig;
+      panel.innerHTML = '';
+      opts.forEach(function (op, i) {
+        const it = document.createElement('button');
+        it.type = 'button';
+        it.className = 'selItem' + (i === sel.selectedIndex ? ' active' : '');
+        it.setAttribute('role', 'option');
+        it.setAttribute('aria-selected', String(i === sel.selectedIndex));
+        it.textContent = op.textContent;
+        it.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          sel.selectedIndex = i;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          wrap._close();
+        });
+        panel.appendChild(it);
+      });
+    };
+    wrap._refresh();
+  }
+
+  function bindSelectDismissal() {
+    const dismiss = function () { closeAllSelects(); };
+    window.addEventListener('resize', dismiss);
+    window.addEventListener('scroll', dismiss, true);
+  }
+
+  function refreshCustomSelects() {
+    document.querySelectorAll('.selWrap').forEach(function (w) { if (w._refresh) w._refresh(); });
+  }
 
   // paints the filled portion of every range track (see --pct in the CSS)
   function refreshRangeFills() {
@@ -2228,14 +2409,14 @@
   }
 
   function closeToolMenu() {
-    document.getElementById('toolMenu').hidden = true;
+    document.getElementById('toolMenu').classList.remove('open');
     document.getElementById('hamburgerBtn').setAttribute('aria-expanded', 'false');
   }
 
   function toggleToolMenu() {
     const menu = document.getElementById('toolMenu');
-    const willShow = menu.hidden;
-    menu.hidden = !willShow;
+    const willShow = !menu.classList.contains('open');
+    menu.classList.toggle('open', willShow);
     document.getElementById('hamburgerBtn').setAttribute('aria-expanded', String(willShow));
   }
 
@@ -2438,8 +2619,13 @@
     });
     document.addEventListener('click', function (e) {
       const menu = document.getElementById('toolMenu');
-      if (!menu.hidden && !menu.contains(e.target) && e.target.id !== 'hamburgerBtn') closeToolMenu();
+      if (menu.classList.contains('open') && !menu.contains(e.target) && e.target.id !== 'hamburgerBtn') closeToolMenu();
+      if (!e.target.closest || !e.target.closest('.selWrap')) closeAllSelects();
     });
+    enhanceSelect(document.getElementById('presetSelect'));
+    enhanceSelect(document.getElementById('handlePresetSelect'));
+    refreshCustomSelects();
+    bindSelectDismissal();
     document.querySelector('.toolMenuItem[data-tool="arch"]').classList.add('active');
 
     initDragHandle();
