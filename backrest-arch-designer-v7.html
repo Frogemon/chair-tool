@@ -223,7 +223,88 @@
     .field { margin-bottom: 9px; }
     #controls h1 { display: none; }
   }
-</style>
+
+  /* ---------- motion + polish pass ---------- */
+  :root { --ease: cubic-bezier(.34,.9,.3,1); --shadow-sm: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.05);
+          --shadow-md: 0 2px 6px rgba(0,0,0,.09), 0 10px 26px rgba(0,0,0,.08); }
+  @media (prefers-color-scheme: dark) {
+    :root { --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 2px 10px rgba(0,0,0,.35);
+            --shadow-md: 0 3px 10px rgba(0,0,0,.5), 0 14px 34px rgba(0,0,0,.45); }
+  }
+  :root[data-theme="dark"] { --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 2px 10px rgba(0,0,0,.35);
+                             --shadow-md: 0 3px 10px rgba(0,0,0,.5), 0 14px 34px rgba(0,0,0,.45); }
+
+  button, select, .field label output, input[type=range]::-webkit-slider-thumb {
+    transition: background-color .18s var(--ease), border-color .18s var(--ease),
+                color .18s var(--ease), box-shadow .18s var(--ease), transform .13s var(--ease);
+  }
+
+  /* buttons lift on hover, press in on click */
+  .familyToggle button, .randomizeBtn, .actionRow button {
+    border-radius: 9px; will-change: transform;
+  }
+  .familyToggle button:hover:not(.active), .actionRow button:hover {
+    border-color: var(--accent); color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm);
+  }
+  .familyToggle button:active, .randomizeBtn:active, .actionRow button:active { transform: translateY(1px) scale(.985); }
+  .familyToggle button.active { box-shadow: var(--shadow-sm); }
+
+  /* segmented control for the loop cutout choice */
+  .familyToggle.segmented { gap: 0; margin-bottom: 0; background: var(--surface-alt);
+    border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .familyToggle.segmented button { flex: 1 1 0; border: none; background: transparent; color: var(--text-muted); border-radius: 7px; }
+  .familyToggle.segmented button.active { background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-sm); }
+  .familyToggle.segmented button:hover:not(.active) { transform: none; box-shadow: none; background: var(--surface); }
+
+  .randomizeBtn:hover { border-color: var(--accent); color: var(--accent); box-shadow: var(--shadow-sm); }
+  .randomizeBtn:hover .dice { display: inline-block; animation: diceRoll .6s var(--ease); }
+  @keyframes diceRoll { 0%{transform:rotate(0) scale(1)} 45%{transform:rotate(190deg) scale(1.18)} 100%{transform:rotate(360deg) scale(1)} }
+
+  /* sliders: filled track showing position, thumb that responds to touch */
+  input[type=range]::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, var(--accent) var(--pct,0%), var(--track) var(--pct,0%));
+    border-radius: 3px; height: 5px;
+  }
+  input[type=range]::-moz-range-track { height: 5px; }
+  input[type=range]::-moz-range-progress { height: 5px; background: var(--accent); border-radius: 3px; }
+  input[type=range]::-webkit-slider-thumb { box-shadow: var(--shadow-sm); }
+  input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+  input[type=range]:active::-webkit-slider-thumb { transform: scale(1.28); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 32%, transparent); }
+  input[type=range]:active::-moz-range-thumb { transform: scale(1.25); }
+
+  /* editable value chips */
+  .field label output { border-radius: 6px; padding: 1px 6px; cursor: text; }
+  .field label output:hover { box-shadow: inset 0 0 0 1px var(--border); }
+
+  select { border-radius: 9px; }
+  select:hover { border-color: var(--accent); }
+
+  /* the drawing sits on a card that reacts to nothing but reads as a surface */
+  #stage svg#previewSvg { filter: drop-shadow(0 6px 18px rgba(0,0,0,.10)); }
+  @media (prefers-color-scheme: dark) { #stage svg#previewSvg { filter: drop-shadow(0 8px 22px rgba(0,0,0,.5)); } }
+
+  /* draggable points feel grabbable */
+  #previewSvg [data-drag] { cursor: grab; }
+  #previewSvg [data-drag]:active { cursor: grabbing; }
+  #previewSvg [data-drag] + circle, #previewSvg [data-drag] ~ * { transition: none; }
+  #previewSvg g#dragHandles circle, #previewSvg g#dragHandles polygon {
+    transition: transform .14s var(--ease), opacity .14s var(--ease);
+    transform-box: fill-box; transform-origin: center;
+  }
+  #previewSvg g#dragHandles:hover circle, #previewSvg g#dragHandles:hover polygon { opacity: .96; }
+
+  /* the shape itself eases between states */
+  #previewSvg path { transition: fill .25s var(--ease), stroke .25s var(--ease); }
+
+  a, button, select, input { -webkit-tap-highlight-color: transparent; }
+  *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+
+  </style>
 </head>
 <body>
 <div id="app">
@@ -313,7 +394,7 @@
 
       <select id="handlePresetSelect"></select>
 
-      <button id="handleRandomizeBtn" type="button" class="randomizeBtn">🎲 Randomize handle</button>
+      <button id="handleRandomizeBtn" type="button" class="randomizeBtn"><span class="dice">🎲</span> Randomize handle</button>
 
       <div class="field">
         <label for="hBoardWidthInput">Board width (at shoulder) <output id="hBoardWidthInputVal"></output></label>
@@ -380,6 +461,17 @@
       <div class="field" id="hField-loopLength">
         <label for="hLoopLengthInput">Loop length <output id="hLoopLengthInputVal"></output></label>
         <input type="range" id="hLoopLengthInput" min="1.25" max="4" step="0.0625">
+      </div>
+      <div class="field" id="hField-loopStyle">
+        <label>Cutout</label>
+        <div class="familyToggle segmented">
+          <button id="hLoopStyleOpenBtn" type="button">Open loop</button>
+          <button id="hLoopStyleRoundBtn" type="button">Round hole</button>
+        </div>
+      </div>
+      <div class="field" id="hField-loopHoleSize">
+        <label for="hLoopHoleSizeInput">Hole size <output id="hLoopHoleSizeInputVal"></output></label>
+        <input type="range" id="hLoopHoleSizeInput" min="0.5" max="2.5" step="0.0625">
       </div>
       <div class="field" id="hField-loopWall">
         <label for="hLoopWallInput">Loop thickness <output id="hLoopWallInputVal"></output></label>
@@ -893,6 +985,7 @@
   // ---------------------------------------------------------------
 
   function render() {
+    refreshRangeFills();
     const shape = computeShape();
     let rightPts = sampleSpine(shape.halfW, shape.h, 220);
     if (state.foiled) rightPts = applyFoilCusps(rightPts, shape.halfW, state.lobes);
@@ -938,6 +1031,8 @@
     loopWidth: 2.6,     // loop only -- outer width of the loop head
     loopLength: 2.75,   // loop only -- how far the loop reaches past the shaft
     loopWall: 0.55,     // loop only -- frame thickness around the finger hole
+    loopHoleStyle: 'open', // loop only -- 'open' full cutout, or 'round' drilled hole
+    loopHoleSize: 1.25, // loop only -- diameter of the round hole
     hasHole: true,
     holeDiameter: 0.375,
     midBend: 0,         // sideways spine offset at the middle bend point, inches
@@ -956,6 +1051,7 @@
     { family: 'loop', name: 'Teardrop Loop', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 1, neckCurve: 0.5, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55 },
     { family: 'loop', name: 'Round Ring', boardWidth: 5, gripWidth: 1.25, neckLength: 1, gripLength: 1.75, neckCurve: 0.4, loopWidth: 2.5, loopLength: 2.5, loopWall: 0.5 },
     { family: 'loop', name: 'Long Oval', boardWidth: 5.5, gripWidth: 1.5, neckLength: 1.25, gripLength: 0.75, neckCurve: 0.55, loopWidth: 2.25, loopLength: 3.5, loopWall: 0.5 },
+    { family: 'loop', name: 'Drilled Round', boardWidth: 5, gripWidth: 1.6, neckLength: 1.25, gripLength: 1, neckCurve: 0.5, loopWidth: 2.6, loopLength: 2.6, loopHoleStyle: 'round', loopHoleSize: 1.25 },
     { family: 'loop', name: 'Chunky Hoop', boardWidth: 6, gripWidth: 2, neckLength: 1, gripLength: 1, neckCurve: 0.3, loopWidth: 3.25, loopLength: 3, loopWall: 0.85 },
     { family: 'swirl', name: 'Heart Scroll', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 2, neckCurve: 0.5, curlTurns: 1, curlTightness: 0.3 },
     { family: 'swirl', name: 'Tight Fiddlehead', boardWidth: 4.5, gripWidth: 1.25, neckLength: 1.25, gripLength: 1.75, neckCurve: 0.4, curlTurns: 1.6, curlTightness: 0.18 }
@@ -1121,6 +1217,20 @@
 
   function buildLoopHole(hs, gripTop) {
     const g = loopGeometry(hs, gripTop);
+    // a plain drilled hole in an otherwise solid head -- the other common
+    // way these handles are made, and what several of the reference
+    // silhouettes use instead of a full open loop
+    if (hs.loopHoleStyle === 'round') {
+      const maxR = Math.min(g.a, g.yw - g.y0, g.yTop - g.yw) - MIN_HOLE_HALF;
+      if (maxR < 0.12) return null;
+      const r = Math.min(hs.loopHoleSize / 2, maxR);
+      const pts = [];
+      for (let i = 0; i < 48; i++) {
+        const t = i / 48 * Math.PI * 2;
+        pts.push({ x: r * Math.sin(t), y: g.yw - r * Math.cos(t) });
+      }
+      return pts;
+    }
     if (!g.hasHole) return null;
     // Built with the SAME two-cubic construction as the outer silhouette,
     // with every dimension pulled in by the wall thickness -- so the two
@@ -1426,7 +1536,10 @@
       const lg = loopGeometry(hs, gripTop);
       g.appendChild(circleHandle(bendAt(lg.yTop), lg.yTop, r, 'loopLength', hitR));
       g.appendChild(circleHandle(bendAt(lg.yw) + lg.a, lg.yw, r, 'loopWidth', hitR));
-      if (lg.hasHole) {
+      if (hs.loopHoleStyle === 'round') {
+        const hr = Math.min(hs.loopHoleSize / 2, Math.min(lg.a, lg.yw - lg.y0, lg.yTop - lg.yw) - MIN_HOLE_HALF);
+        if (hr > 0.05) g.appendChild(circleHandle(bendAt(lg.yw) + hr, lg.yw, r * 0.8, 'loopHoleSize', hitR));
+      } else if (lg.hasHole) {
         const wallY = lg.yTop - lg.wall;
         g.appendChild(circleHandle(bendAt(wallY), wallY, r * 0.8, 'loopWall', hitR));
       }
@@ -1580,6 +1693,7 @@
     const outline = buildHandleOutline();
     drawHandlePreview(outline);
     updateHandleDims();
+    refreshRangeFills();
     if (!skipPrint) buildHandlePrintSheet();
   }
 
@@ -1601,7 +1715,13 @@
     show('hField-curlTightness', hs.family === 'swirl');
     show('hField-loopWidth', hs.family === 'loop');
     show('hField-loopLength', hs.family === 'loop');
-    show('hField-loopWall', hs.family === 'loop');
+    show('hField-loopStyle', hs.family === 'loop');
+    show('hField-loopWall', hs.family === 'loop' && hs.loopHoleStyle !== 'round');
+    show('hField-loopHoleSize', hs.family === 'loop' && hs.loopHoleStyle === 'round');
+    if (hs.family === 'loop') {
+      document.getElementById('hLoopStyleOpenBtn').classList.toggle('active', hs.loopHoleStyle !== 'round');
+      document.getElementById('hLoopStyleRoundBtn').classList.toggle('active', hs.loopHoleStyle === 'round');
+    }
     // the loop's head replaces the straight grip's cap entirely, so "grip
     // length" is really just the shaft below the loop here
     document.querySelector('label[for="hGripLengthInput"]').firstChild.nodeValue =
@@ -1616,7 +1736,8 @@
     hGripLengthInput: 'gripLength', hNeckCurveInput: 'neckCurve', hMidBendInput: 'midBend', hTipBendInput: 'tipBend',
     hCapDepthInput: 'capDepth', hPointCurveInput: 'pointCurve', hNotchWidthInput: 'notchWidth', hNotchDepthInput: 'notchDepth',
     hCurlTurnsInput: 'curlTurns', hCurlTightnessInput: 'curlTightness', hHoleDiameterInput: 'holeDiameter',
-    hLoopWidthInput: 'loopWidth', hLoopLengthInput: 'loopLength', hLoopWallInput: 'loopWall'
+    hLoopWidthInput: 'loopWidth', hLoopLengthInput: 'loopLength', hLoopWallInput: 'loopWall',
+    hLoopHoleSizeInput: 'loopHoleSize'
   };
 
   function syncHandleControlsFromState() {
@@ -1640,7 +1761,7 @@
     });
   }
 
-  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0, bendMidPos: 0.5, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55 };
+  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0, bendMidPos: 0.5, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55, loopHoleStyle: 'open', loopHoleSize: 1.25 };
 
   function applyHandlePreset(p) {
     Object.assign(handleState, HANDLE_DEFAULTS, p);
@@ -1655,6 +1776,13 @@
     handleState.family = fam;
     populateHandlePresetSelect();
     applyHandlePreset(handleFamilyPresets(fam)[0]);
+  }
+
+  function setLoopHoleStyle(style) {
+    if (handleState.loopHoleStyle === style) return;
+    handleState.loopHoleStyle = style;
+    updateHandleFieldVisibility();
+    renderHandle();
   }
 
   function randomBetween(min, max) { return min + Math.random() * (max - min); }
@@ -1696,6 +1824,8 @@
       next.loopWidth = randomBetween(Math.max(1.25, gripWidth + 0.5), 4);
       next.loopLength = randomBetween(1.5, 4);
       next.loopWall = randomBetween(0.3, Math.min(1.2, next.loopWidth / 2 - 0.35, next.loopLength - 0.6));
+      next.loopHoleStyle = Math.random() < 0.35 ? 'round' : 'open';
+      next.loopHoleSize = randomBetween(0.6, Math.min(2.5, next.loopWidth * 0.55));
     } else {
       next.curlTurns = randomBetween(0.6, 1.7);
       next.curlTightness = randomBetween(0.14, 0.45);
@@ -1717,6 +1847,16 @@
   // geometry functions use to place it, so the handle and the slider
   // always agree.
   // ---------------------------------------------------------------
+
+  // paints the filled portion of every range track (see --pct in the CSS)
+  function refreshRangeFills() {
+    const rs = document.querySelectorAll('input[type=range]');
+    for (let i = 0; i < rs.length; i++) {
+      const el = rs[i], mn = parseFloat(el.min), mx = parseFloat(el.max), v = parseFloat(el.value);
+      const pct = mx > mn ? ((v - mn) / (mx - mn)) * 100 : 0;
+      el.style.setProperty('--pct', pct.toFixed(2) + '%');
+    }
+  }
 
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
@@ -1835,6 +1975,12 @@
       const b = sliderBounds('hLoopWidthInput');
       handleState.loopWidth = clamp(p.x * 2, b.min, b.max);
       syncOneHandleControl('hLoopWidthInput', 'loopWidth');
+      renderHandle(true);
+    },
+    loopHoleSize: function (p) {
+      const b = sliderBounds('hLoopHoleSizeInput');
+      handleState.loopHoleSize = clamp(p.x * 2, b.min, b.max);
+      syncOneHandleControl('hLoopHoleSizeInput', 'loopHoleSize');
       renderHandle(true);
     },
     loopWall: function (p) {
@@ -2263,6 +2409,9 @@
     bindHandleRange('hLoopWidthInput', 'loopWidth', parseFloat);
     bindHandleRange('hLoopLengthInput', 'loopLength', parseFloat);
     bindHandleRange('hLoopWallInput', 'loopWall', parseFloat);
+    bindHandleRange('hLoopHoleSizeInput', 'loopHoleSize', parseFloat);
+    document.getElementById('hLoopStyleOpenBtn').addEventListener('click', function () { setLoopHoleStyle('open'); });
+    document.getElementById('hLoopStyleRoundBtn').addEventListener('click', function () { setLoopHoleStyle('round'); });
     bindHandleRange('hHoleDiameterInput', 'holeDiameter', parseFloat);
 
     document.getElementById('hHasHoleCheckbox').addEventListener('change', function (e) {
