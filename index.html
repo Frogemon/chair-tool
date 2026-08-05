@@ -1008,6 +1008,16 @@
   // centerline (0, gripTop.y) and the outer edge starts exactly at the
   // grip's corner, so mirroring produces a symmetric double-scroll/heart
   // shape meeting cleanly at the center, same as the other three families.
+  // Floor on the swirl ribbon's half-width so the curl's tail keeps a
+  // real, cuttable thickness (~0.13" finished, comfortably above the
+  // ~1/8" that's a normal safe minimum for a thin scroll-saw detail)
+  // instead of tapering to a hairline. Kept below 0.72 * the tightest
+  // radius the "curl tightness" slider allows (min 0.1", so 0.072" here)
+  // so it never forces the ribbon wider than its own local curvature --
+  // that's exactly the condition that reintroduces the self-crossing
+  // the lead-in run above was built to avoid.
+  const MIN_SWIRL_HALF_WIDTH = 0.065;
+
   function buildSwirlCap(hs, gripTop) {
     const halfWidth0 = hs.gripWidth / 4;
     // the curl's opening arc swings up by roughly R0 before it turns back
@@ -1049,7 +1059,7 @@
       leadLen += leadStep;
       y += -leadStep;
       const lt = leadLen / leadIn;
-      const hw = Math.max(halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(lt)), 3), 0.02);
+      const hw = Math.max(halfWidth0 * Math.pow(Math.max(0, 1 - smoothstep01(lt)), 3), MIN_SWIRL_HALF_WIDTH);
       spine.push({ x: x, y: y, heading: 0, hw: hw });
     }
     const hwAfterLeadIn = spine[spine.length - 1].hw;
@@ -1066,10 +1076,14 @@
       x += Math.sin(heading) * ds;
       y += -Math.cos(heading) * ds;
       // eased taper (not linear): thins gradually at first, then faster
-      // near the tip, tapering to a fine point rather than a blunt end
+      // near the tip, tapering to a fine point rather than a blunt end.
+      // Floored well short of zero -- a line that tapers all the way to
+      // a hairline isn't something you can actually see on a printed
+      // template or safely cut and sand out of wood, so the curl's tail
+      // keeps a real, cuttable thickness instead of vanishing to a point.
       let hw = hwAfterLeadIn * Math.pow(Math.max(0, 1 - smoothstep01(t)), 1.4);
       hw = Math.min(hw, R * 0.72);
-      hw = Math.max(hw, 0.02);
+      hw = Math.max(hw, MIN_SWIRL_HALF_WIDTH);
       spine.push({ x: x, y: y, heading: heading, hw: hw });
     }
 
