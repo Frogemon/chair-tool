@@ -307,6 +307,7 @@
         <button id="handleFamilyRoundedBtn" type="button">Rounded</button>
         <button id="handleFamilyPointedBtn" type="button">Pointed</button>
         <button id="handleFamilyCleaverBtn" type="button">Cleaver Notch</button>
+        <button id="handleFamilyLoopBtn" type="button">Loop</button>
         <button id="handleFamilySwirlBtn" type="button">Swirl</button>
       </div>
 
@@ -370,6 +371,20 @@
       <div class="field" id="hField-notchDepth">
         <label for="hNotchDepthInput">Notch depth <output id="hNotchDepthInputVal"></output></label>
         <input type="range" id="hNotchDepthInput" min="0.2" max="1.5" step="0.0625">
+      </div>
+
+      <div class="field" id="hField-loopWidth">
+        <label for="hLoopWidthInput">Loop width <output id="hLoopWidthInputVal"></output></label>
+        <input type="range" id="hLoopWidthInput" min="1.25" max="4" step="0.0625">
+      </div>
+      <div class="field" id="hField-loopLength">
+        <label for="hLoopLengthInput">Loop length <output id="hLoopLengthInputVal"></output></label>
+        <input type="range" id="hLoopLengthInput" min="1.25" max="4" step="0.0625">
+      </div>
+      <div class="field" id="hField-loopWall">
+        <label for="hLoopWallInput">Loop thickness <output id="hLoopWallInputVal"></output></label>
+        <input type="range" id="hLoopWallInput" min="0.3" max="1.2" step="0.0625">
+        <div class="hint">How thick the frame around the finger hole is</div>
       </div>
 
       <div class="field" id="hField-curlTurns">
@@ -908,7 +923,7 @@
   // =================================================================
 
   const handleState = {
-    family: 'rounded', // 'rounded' | 'pointed' | 'cleaver' | 'swirl'
+    family: 'rounded', // 'rounded' | 'pointed' | 'cleaver' | 'loop' | 'swirl'
     boardWidth: 5,
     gripWidth: 1.5,
     neckLength: 1.25,
@@ -920,6 +935,9 @@
     notchDepth: 0.55,   // cleaver only
     curlTurns: 1.1,     // swirl only
     curlTightness: 0.28, // swirl only (min radius at the core, inches)
+    loopWidth: 2.6,     // loop only -- outer width of the loop head
+    loopLength: 2.75,   // loop only -- how far the loop reaches past the shaft
+    loopWall: 0.55,     // loop only -- frame thickness around the finger hole
     hasHole: true,
     holeDiameter: 0.375,
     midBend: 0,         // sideways spine offset at the grip/cap landmark, inches
@@ -934,6 +952,10 @@
     { family: 'pointed', name: 'Lancet Point', boardWidth: 5, gripWidth: 1.25, neckLength: 1.25, gripLength: 2.75, neckCurve: 0.6, capDepth: 2, pointCurve: 0.75 },
     { family: 'cleaver', name: 'Cleaver Notch', boardWidth: 6, gripWidth: 2, neckLength: 0.75, gripLength: 1.75, neckCurve: 0.2, capDepth: 1, notchWidth: 1.1, notchDepth: 0.5 },
     { family: 'cleaver', name: 'Deep Thumb Notch', boardWidth: 5.5, gripWidth: 1.75, neckLength: 1, gripLength: 2, neckCurve: 0.3, capDepth: 1.2, notchWidth: 1.3, notchDepth: 0.8 },
+    { family: 'loop', name: 'Teardrop Loop', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 1, neckCurve: 0.5, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55 },
+    { family: 'loop', name: 'Round Ring', boardWidth: 5, gripWidth: 1.25, neckLength: 1, gripLength: 1.75, neckCurve: 0.4, loopWidth: 2.5, loopLength: 2.5, loopWall: 0.5 },
+    { family: 'loop', name: 'Long Oval', boardWidth: 5.5, gripWidth: 1.5, neckLength: 1.25, gripLength: 0.75, neckCurve: 0.55, loopWidth: 2.25, loopLength: 3.5, loopWall: 0.5 },
+    { family: 'loop', name: 'Chunky Hoop', boardWidth: 6, gripWidth: 2, neckLength: 1, gripLength: 1, neckCurve: 0.3, loopWidth: 3.25, loopLength: 3, loopWall: 0.85 },
     { family: 'swirl', name: 'Heart Scroll', boardWidth: 5, gripWidth: 1.5, neckLength: 1.25, gripLength: 2, neckCurve: 0.5, curlTurns: 1, curlTightness: 0.3 },
     { family: 'swirl', name: 'Tight Fiddlehead', boardWidth: 4.5, gripWidth: 1.25, neckLength: 1.25, gripLength: 1.75, neckCurve: 0.4, curlTurns: 1.6, curlTightness: 0.18 }
   ];
@@ -999,6 +1021,94 @@
     pts.push({ x: notchHalfW, y: flatY });
     pts.push({ x: hs.gripWidth / 2, y: flatY });
     return pts; // caller appends gripTop next, drawing the flat cap's short drop back down to the grip
+  }
+
+  // ---------------------------------------------------------------
+  // Loop handle: a closed frame with a finger hole through it -- the
+  // shape most cutting-board handles actually are. Unlike the other
+  // families (a solid silhouette with an optional small hanging hole),
+  // this one is defined by TWO curves: an outer silhouette and an inner
+  // cutout, with the wood between them being the part you grip. The
+  // thickness of that frame is a direct parameter rather than something
+  // that falls out of the geometry, which is what makes it predictable
+  // to cut -- no thin spots, no guessing.
+  // ---------------------------------------------------------------
+
+  const BEZ_K = 0.5523; // control-point ratio that makes a cubic match a circular quarter-arc
+
+  function cubicPoints(P0, C1, C2, P3, n) {
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, mt = 1 - t;
+      pts.push({
+        x: mt * mt * mt * P0.x + 3 * mt * mt * t * C1.x + 3 * mt * t * t * C2.x + t * t * t * P3.x,
+        y: mt * mt * mt * P0.y + 3 * mt * mt * t * C1.y + 3 * mt * t * t * C2.y + t * t * t * P3.y
+      });
+    }
+    return pts;
+  }
+
+  // Shared measurements for the loop head, so the outer silhouette and the
+  // inner cutout can't disagree about where anything is. The wall is
+  // clamped against the loop's own size: a thick wall on a small loop
+  // would otherwise swallow the hole entirely and leave a solid blob.
+  const LOOP_SHOULDER = 0.45;   // height of the loop's widest point, as a fraction of its length
+  const MIN_HOLE_HALF = 0.15;   // smallest half-width/height worth calling a hole
+
+  function loopGeometry(hs, gripTop) {
+    const w0 = hs.gripWidth / 2;
+    const a = Math.max(hs.loopWidth / 2, w0 + 0.08); // loop is never narrower than the shaft it grows from
+    const y0 = gripTop.y, yTop = y0 + hs.loopLength;
+    const yw = y0 + hs.loopLength * LOOP_SHOULDER;
+    const wallMax = Math.min(a - MIN_HOLE_HALF, hs.loopLength - MIN_HOLE_HALF * 2 - 0.05);
+    const wall = Math.min(hs.loopWall, Math.max(wallMax, 0.02));
+    return { w0: w0, a: a, y0: y0, yTop: yTop, yw: yw, wall: wall, hasHole: wallMax >= 0.08 };
+  }
+
+  // Outer silhouette, right half, ordered tip-first down to the shaft
+  // corner -- same contract as the other cap builders. Two cubics: an
+  // S-curve flaring the shaft out to the loop's widest point (vertical
+  // tangent at both ends, so it leaves the shaft smoothly), then a
+  // quarter-arc dome over the top (horizontal tangent at the centerline,
+  // so the mirrored halves meet without a seam).
+  function buildLoopCap(hs, gripTop) {
+    const g = loopGeometry(hs, gripTop);
+    const dyA = g.yw - g.y0, dyB = g.yTop - g.yw;
+    const flare = cubicPoints(
+      { x: g.w0, y: g.y0 },
+      { x: g.w0, y: g.y0 + dyA * 0.55 },
+      { x: g.a, y: g.yw - dyA * 0.55 },
+      { x: g.a, y: g.yw }, 30);
+    const dome = cubicPoints(
+      { x: g.a, y: g.yw },
+      { x: g.a, y: g.yw + dyB * BEZ_K },
+      { x: g.a * BEZ_K, y: g.yTop },
+      { x: 0, y: g.yTop }, 30);
+    return flare.concat(dome.slice(1)).reverse();
+  }
+
+  // The finger hole: a closed rounded opening inset inside the loop head,
+  // sitting on top of the solid shaft. Returned as a full closed loop of
+  // points (both halves) since it isn't mirrored by buildOutline.
+  function buildLoopHole(hs, gripTop) {
+    const g = loopGeometry(hs, gripTop);
+    if (!g.hasHole) return null;
+    const ai = g.a - g.wall;
+    const yhb = g.y0, yht = g.yTop - g.wall;
+    const ywi = yhb + (yht - yhb) * 0.5;
+    const lower = cubicPoints(
+      { x: 0, y: yhb },
+      { x: ai * BEZ_K, y: yhb },
+      { x: ai, y: ywi - (ywi - yhb) * BEZ_K },
+      { x: ai, y: ywi }, 26);
+    const upper = cubicPoints(
+      { x: ai, y: ywi },
+      { x: ai, y: ywi + (yht - ywi) * BEZ_K },
+      { x: ai * BEZ_K, y: yht },
+      { x: 0, y: yht }, 26);
+    const right = lower.concat(upper.slice(1));
+    const left = right.slice().reverse().map(function (p) { return { x: -p.x, y: p.y }; });
+    return right.concat(left.slice(1));
   }
 
   // Swirl/scroll: a curvature-integrated Euler-spiral curl (heading turns
@@ -1120,6 +1230,7 @@
     if (hs.family === 'rounded') capPts = buildRoundedCap(hs, gripTop);
     else if (hs.family === 'pointed') capPts = buildPointedCap(hs, gripTop);
     else if (hs.family === 'cleaver') capPts = buildCleaverCap(hs, gripTop);
+    else if (hs.family === 'loop') capPts = buildLoopCap(hs, gripTop);
     else capPts = buildSwirlCap(hs, gripTop);
 
     const rightPts = capPts.concat([gripTop, gripBottom]).concat(buildNeckPoints(hs));
@@ -1135,7 +1246,17 @@
       const hy = gripTop.y + hs.capDepth * 0.55;
       hole = { cx: bendAt(hy), cy: hy, r: hs.holeDiameter / 2 };
     }
-    return { d: d, allPts: bentPts, hole: hole, midY: midY, tipY: tipY };
+    // the loop's cutout is a full path rather than a circle, and gets the
+    // same bend applied so it stays centred inside the frame when bent
+    let holePts = null, holeD = null;
+    if (hs.family === 'loop') {
+      const raw = buildLoopHole(hs, gripTop);
+      if (raw) {
+        holePts = raw.map(function (p) { return { x: p.x + bendAt(p.y), y: p.y }; });
+        holeD = pointsToOpenPath(holePts) + ' Z';
+      }
+    }
+    return { d: d, allPts: bentPts, hole: hole, holePts: holePts, holeD: holeD, midY: midY, tipY: tipY };
   }
 
   function pointsToOpenPath(pts) {
@@ -1229,9 +1350,17 @@
     const neckCurveY = hs.neckLength / 2;
     g.appendChild(diamondHandle(bendAt(neckCurveY) + midX - hs.neckCurve * halfDiff, neckCurveY, r * 1.5, 'neckCurve', hitR));
 
-    if (hs.family !== 'swirl') {
+    if (hs.family !== 'swirl' && hs.family !== 'loop') {
       const capY = gripTop.y + hs.capDepth;
       g.appendChild(circleHandle(bendAt(capY), capY, r, 'capDepth', hitR));
+    }
+    if (hs.family === 'loop') {
+      const lg = loopGeometry(hs, gripTop);
+      g.appendChild(circleHandle(bendAt(lg.yTop), lg.yTop, r, 'loopLength', hitR));
+      g.appendChild(circleHandle(bendAt(lg.yw) + lg.a, lg.yw, r, 'loopWidth', hitR));
+      if (lg.hasHole) {
+        g.appendChild(circleHandle(bendAt(lg.yw) + lg.a - lg.wall, lg.yw, r * 0.8, 'loopWall', hitR));
+      }
     }
     if (hs.family === 'rounded' && hs.hasHole) {
       const holeY = gripTop.y + hs.capDepth * 0.55;
@@ -1301,8 +1430,12 @@
       'stroke-dasharray': (vw * 0.01) + ' ' + (vw * 0.008)
     }));
 
+    // the loop's cutout rides along as a second subpath with evenodd, so
+    // it renders as a genuine hole through the shape rather than a circle
+    // painted over it -- what you'd actually be cutting out
     svg.appendChild(el('path', {
-      d: outline.d, fill: 'var(--shape-fill)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.006, 'stroke-linejoin': 'round'
+      d: outline.d + (outline.holeD ? ' ' + outline.holeD : ''), 'fill-rule': 'evenodd',
+      fill: 'var(--shape-fill)', stroke: 'var(--shape-stroke)', 'stroke-width': vw * 0.006, 'stroke-linejoin': 'round'
     }));
     if (outline.hole) {
       svg.appendChild(el('circle', {
@@ -1321,7 +1454,7 @@
       '<br><span class="dragHint">Tip: press and drag the dots on the shape to reshape it directly.</span>';
   }
 
-  const HANDLE_FAMILY_NAMES = { rounded: 'Rounded', pointed: 'Pointed', cleaver: 'Cleaver Notch', swirl: 'Swirl' };
+  const HANDLE_FAMILY_NAMES = { rounded: 'Rounded', pointed: 'Pointed', cleaver: 'Cleaver Notch', loop: 'Loop', swirl: 'Swirl' };
 
   function handleLabelParagraphs(scale) {
     const hs = handleState;
@@ -1360,6 +1493,9 @@
     if (outline.hole) {
       g.appendChild(el('circle', { cx: outline.hole.cx, cy: outline.hole.cy, r: outline.hole.r, fill: 'none', stroke: '#000', 'stroke-width': (0.02 / scale) }));
     }
+    if (outline.holeD) {
+      g.appendChild(el('path', { d: outline.holeD, fill: 'none', stroke: '#000', 'stroke-width': (0.02 / scale) }));
+    }
     svg.appendChild(g);
 
     const shapeLeft = originX + bbox.minX * scale, shapeRight = originX + bbox.maxX * scale, shapeBottom = originY + bbox.maxY * scale;
@@ -1394,7 +1530,14 @@
     show('hField-notchDepth', hs.family === 'cleaver');
     show('hField-curlTurns', hs.family === 'swirl');
     show('hField-curlTightness', hs.family === 'swirl');
-    ['Rounded', 'Pointed', 'Cleaver', 'Swirl'].forEach(function (label) {
+    show('hField-loopWidth', hs.family === 'loop');
+    show('hField-loopLength', hs.family === 'loop');
+    show('hField-loopWall', hs.family === 'loop');
+    // the loop's head replaces the straight grip's cap entirely, so "grip
+    // length" is really just the shaft below the loop here
+    document.querySelector('label[for="hGripLengthInput"]').firstChild.nodeValue =
+      hs.family === 'loop' ? 'Shaft length ' : 'Grip length ';
+    ['Rounded', 'Pointed', 'Cleaver', 'Loop', 'Swirl'].forEach(function (label) {
       document.getElementById('handleFamily' + label + 'Btn').classList.toggle('active', hs.family === label.toLowerCase());
     });
   }
@@ -1403,7 +1546,8 @@
     hBoardWidthInput: 'boardWidth', hGripWidthInput: 'gripWidth', hNeckLengthInput: 'neckLength',
     hGripLengthInput: 'gripLength', hNeckCurveInput: 'neckCurve', hMidBendInput: 'midBend', hTipBendInput: 'tipBend',
     hCapDepthInput: 'capDepth', hPointCurveInput: 'pointCurve', hNotchWidthInput: 'notchWidth', hNotchDepthInput: 'notchDepth',
-    hCurlTurnsInput: 'curlTurns', hCurlTightnessInput: 'curlTightness', hHoleDiameterInput: 'holeDiameter'
+    hCurlTurnsInput: 'curlTurns', hCurlTightnessInput: 'curlTightness', hHoleDiameterInput: 'holeDiameter',
+    hLoopWidthInput: 'loopWidth', hLoopLengthInput: 'loopLength', hLoopWallInput: 'loopWall'
   };
 
   function syncHandleControlsFromState() {
@@ -1427,7 +1571,7 @@
     });
   }
 
-  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0 };
+  const HANDLE_DEFAULTS = { capDepth: 1.5, pointCurve: 0.35, notchWidth: 1.1, notchDepth: 0.55, curlTurns: 1.1, curlTightness: 0.28, hasHole: false, holeDiameter: 0.375, midBend: 0, tipBend: 0, loopWidth: 2.6, loopLength: 2.75, loopWall: 0.55 };
 
   function applyHandlePreset(p) {
     Object.assign(handleState, HANDLE_DEFAULTS, p);
@@ -1452,7 +1596,7 @@
   // rather than their independent slider maximums, so a narrow grip can't
   // roll a notch wider than itself).
   function randomizeHandle() {
-    const families = ['rounded', 'pointed', 'cleaver', 'swirl'];
+    const families = ['rounded', 'pointed', 'cleaver', 'loop', 'swirl'];
     const family = families[Math.floor(Math.random() * families.length)];
     const boardWidth = randomBetween(3.5, 7.5);
     const gripWidth = randomBetween(0.9, Math.min(2.75, boardWidth * 0.75));
@@ -1475,6 +1619,14 @@
       next.capDepth = randomBetween(0.7, 1.6);
       next.notchWidth = randomBetween(0.6, Math.min(2.2, gripWidth * 1.6));
       next.notchDepth = randomBetween(0.3, next.capDepth * 0.85);
+    } else if (family === 'loop') {
+      // loop is always at least a little wider than the shaft, and the
+      // wall is picked relative to the loop it has to fit inside so a
+      // small loop can never roll a wall thick enough to close the hole
+      next.gripLength = randomBetween(0.5, 2);
+      next.loopWidth = randomBetween(Math.max(1.25, gripWidth + 0.5), 4);
+      next.loopLength = randomBetween(1.5, 4);
+      next.loopWall = randomBetween(0.3, Math.min(1.2, next.loopWidth / 2 - 0.35, next.loopLength - 0.6));
     } else {
       next.curlTurns = randomBetween(0.6, 1.7);
       next.curlTightness = randomBetween(0.14, 0.45);
@@ -1598,6 +1750,29 @@
       const b = sliderBounds('hTipBendInput');
       handleState.tipBend = clamp(p.x, b.min, b.max);
       syncOneHandleControl('hTipBendInput', 'tipBend');
+      renderHandle(true);
+    },
+    loopLength: function (p) {
+      const hs = handleState;
+      const b = sliderBounds('hLoopLengthInput');
+      hs.loopLength = clamp(p.y - (hs.neckLength + hs.gripLength), b.min, b.max);
+      syncOneHandleControl('hLoopLengthInput', 'loopLength');
+      renderHandle(true);
+    },
+    loopWidth: function (p) {
+      const b = sliderBounds('hLoopWidthInput');
+      handleState.loopWidth = clamp(p.x * 2, b.min, b.max);
+      syncOneHandleControl('hLoopWidthInput', 'loopWidth');
+      renderHandle(true);
+    },
+    loopWall: function (p) {
+      const hs = handleState;
+      const gripTop = { x: hs.gripWidth / 2, y: hs.neckLength + hs.gripLength };
+      const b = sliderBounds('hLoopWallInput');
+      // the handle sits at the hole's edge, so the wall is the gap back
+      // out to the loop's outer edge at that same height
+      hs.loopWall = clamp(loopGeometry(hs, gripTop).a - p.x, b.min, b.max);
+      syncOneHandleControl('hLoopWallInput', 'loopWall');
       renderHandle(true);
     },
     curlTurns: function (p) {
@@ -1992,6 +2167,7 @@
     document.getElementById('handleFamilyRoundedBtn').addEventListener('click', function () { switchHandleFamily('rounded'); });
     document.getElementById('handleFamilyPointedBtn').addEventListener('click', function () { switchHandleFamily('pointed'); });
     document.getElementById('handleFamilyCleaverBtn').addEventListener('click', function () { switchHandleFamily('cleaver'); });
+    document.getElementById('handleFamilyLoopBtn').addEventListener('click', function () { switchHandleFamily('loop'); });
     document.getElementById('handleFamilySwirlBtn').addEventListener('click', function () { switchHandleFamily('swirl'); });
     document.getElementById('handlePresetSelect').addEventListener('change', function (e) {
       const p = handleFamilyPresets(handleState.family)[parseInt(e.target.value, 10)];
@@ -2012,6 +2188,9 @@
     bindHandleRange('hNotchDepthInput', 'notchDepth', parseFloat);
     bindHandleRange('hCurlTurnsInput', 'curlTurns', parseFloat);
     bindHandleRange('hCurlTightnessInput', 'curlTightness', parseFloat);
+    bindHandleRange('hLoopWidthInput', 'loopWidth', parseFloat);
+    bindHandleRange('hLoopLengthInput', 'loopLength', parseFloat);
+    bindHandleRange('hLoopWallInput', 'loopWall', parseFloat);
     bindHandleRange('hHoleDiameterInput', 'holeDiameter', parseFloat);
 
     document.getElementById('hHasHoleCheckbox').addEventListener('change', function (e) {
