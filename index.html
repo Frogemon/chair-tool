@@ -907,10 +907,24 @@
   // earlier longer version could wrap to two lines for some viewports,
   // and its height wasn't accounted for where the ruler got positioned,
   // which let it spill past the bottom of the page for tall designs.
-  var CALIBRATION_TEXT = 'CALIBRATION: this bar must measure exactly 6.00in. If not, your printer rescaled the page — reprint at "Actual Size / 100%".';
+  // The sheet states which calibration produced it. Without that there is no
+  // way to tell a print that ignored the setting from one where the setting
+  // is wrong -- they look identical on paper, and the difference decides
+  // whether you change the number or go find out why it did not apply.
+  function calibrationText() {
+    const c = printCalFactor();
+    const drawn = (6 * c).toFixed(2);
+    if (Math.abs(printCalMeasured - 6) < 1e-9) {
+      return 'CALIBRATION: this bar must measure exactly 6.00in. It is drawn 6.00in \u2014 correction is OFF. '
+           + 'If it measures anything else, type that measurement into "Printer calibration" in the app and reprint.';
+    }
+    return 'CALIBRATION: this bar must measure exactly 6.00in. Correction is ON for a measured ' + printCalMeasured.toFixed(3)
+         + 'in, so the bar is drawn ' + drawn + 'in on the sheet and should come out 6.00in. '
+         + 'If it still measures ' + printCalMeasured.toFixed(3) + 'in, the app did not reload \u2014 hard-refresh the page.';
+  }
 
   function calibrationRulerLines() {
-    return wrapTextLines(CALIBRATION_TEXT, USABLE_W, 0.09);
+    return wrapTextLines(calibrationText(), USABLE_W, 0.09);
   }
 
   // vertical space the ruler's own content (ticks, "0"/"6in" labels, and
