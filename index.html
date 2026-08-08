@@ -561,8 +561,8 @@
 
     <div class="field" id="calField">
       <label for="printCalInput">Printer calibration <output id="printCalInputVal"></output></label>
-      <input type="range" id="printCalInput" min="4" max="8" step="0.03125">
-      <div class="hint">Print one sheet, measure the 6&quot; bar at the bottom with a real ruler, and set this to what it actually measured. Leave at 6.000&quot; if it already measures right.</div>
+      <input type="range" id="printCalInput" min="4" max="8" step="0.0625">
+      <div class="hint">Print one sheet, measure the 6&quot; bar with a real ruler, and set this to what it actually came out to — the pattern is then corrected to true size. Remembered on this device. Printing from an iPhone or iPad usually needs this, because Safari reserves space for the URL/date footer it adds and shrinks the sheet to fit; no setting in the iOS print dialog turns that off.</div>
     </div>
 
     <div class="actionRow">
@@ -1115,7 +1115,24 @@
   // rare pathological case, rather than nothing at all.
   // =================================================================
 
+  // Calibration is a property of the device+printer, not the design, so it
+  // is remembered. iOS Safari in particular reserves its own margins for the
+  // URL/date footer it adds and fits the sheet into what is left, which no
+  // setting in the iOS print dialog turns off -- so this gets entered once
+  // per device and then stays put.
+  const PRINT_CAL_KEY = 'chairtool.printCalMeasured';
   let printCalMeasured = 6;   // inches the 6in calibration bar actually measured
+
+  function loadPrintCal() {
+    try {
+      const v = parseFloat(localStorage.getItem(PRINT_CAL_KEY));
+      if (v > 0 && v >= 4 && v <= 8) printCalMeasured = v;
+    } catch (e) { /* private mode / storage disabled -- just use the default */ }
+  }
+
+  function savePrintCal() {
+    try { localStorage.setItem(PRINT_CAL_KEY, String(printCalMeasured)); } catch (e) { /* ignore */ }
+  }
 
   const handleState = {
     family: 'rounded', // 'rounded' | 'pointed' | 'cleaver' | 'loop' | 'swirl'
@@ -2730,11 +2747,14 @@
       const paint = function () {
         out.textContent = printCalMeasured.toFixed(3) + '" (' + toFraction16(printCalMeasured) + ')';
       };
+      loadPrintCal();
+      applyPrintCalibration();
       el2.value = printCalMeasured;
       paint();
       el2.addEventListener('input', function () {
         printCalMeasured = parseFloat(el2.value);
         applyPrintCalibration();
+        savePrintCal();
         paint();
         refreshRangeFills();
         if (appMode === 'handle') renderHandle(); else render();
