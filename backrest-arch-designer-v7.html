@@ -1650,7 +1650,8 @@
     svg.innerHTML = '';
     const hs = handleState;
     const bbox = computeBBox(outline.allPts);
-    const fits = (bbox.maxX - bbox.minX) <= USABLE_W && (bbox.maxY - bbox.minY) <= USABLE_H;
+    const plan = handleSheetPlan({ w: bbox.maxX - bbox.minX, h: bbox.maxY - bbox.minY });
+    const fits = !plan.tiled;
     const stroke = fits ? 'var(--guide-ok)' : 'var(--guide-warn)';
 
     const guideX = (bbox.minX + bbox.maxX) / 2 - USABLE_W / 2, guideY = Math.min(0, bbox.minY);
@@ -1674,7 +1675,7 @@
     }));
     svg.appendChild(textEl({
       x: guideX + 0.1, y: guideY - pad * 0.25, 'font-size': Math.max(vw, vh) * 0.032, fill: stroke, 'font-family': 'sans-serif'
-    }, fits ? '✓ fits one 8.5×11 sheet' : '⚠ exceeds one sheet — will scale down for print'));
+    }, fits ? '✓ fits one 8.5×11 sheet' : ('⚑ prints 1:1 across ' + plan.total + ' sheets — tape together')));
 
     const w2 = hs.boardWidth / 2;
     svg.appendChild(el('line', {
@@ -1718,8 +1719,77 @@
     if (hs.midBend !== 0 || hs.tipBend !== 0) {
       paras.push('Spine bent ' + hs.midBend.toFixed(2) + '" at mid, ' + hs.tipBend.toFixed(2) + '" at tip.');
     }
-    paras.push(scale < 1 ? ('Scaled to ' + (scale * 100).toFixed(0) + '% to fit on one sheet — this design is unusually large for a handle.') : 'Printed at true 1:1 scale.');
+    paras.push('Printed at true 1:1 scale.');
     return paras;
+  }
+
+  // One place that decides how many 1:1 sheets a handle needs, so the
+  // on-screen message and the actual print can never disagree.
+  function handleSheetPlan(bbox) {
+    const rulerH = calibrationRulerContentHeight();
+    const onePageH = USABLE_H - rulerH - 0.35;       // single sheet keeps room for the ruler + notes
+    if (bbox.w <= USABLE_W + 1e-6 && bbox.h <= onePageH + 1e-6) {
+      return { tiled: false, cols: 1, rows: 1, total: 1 };
+    }
+    const tileW = USABLE_W, tileH = USABLE_H - rulerH - 0.5;
+    const cols = Math.max(1, Math.ceil((bbox.w - 1e-6) / tileW));
+    const rows = Math.max(1, Math.ceil((bbox.h - 1e-6) / tileH));
+    return { tiled: true, cols: cols, rows: rows, total: cols * rows, tileW: tileW, tileH: tileH };
+  }
+
+  // Tiles the pattern across as many true-size sheets as it needs.
+  // Quietly shrinking it to fit was worse than useless: you cannot trace a
+  // 95%-size template onto wood, and the calibration ruler still measures a
+  // true 6in while it happens, so nothing on the page reveals that the
+  // shape itself is wrong. Overflowing designs now spill onto extra sheets
+  // at 1:1 and get taped, the same way the arch tool already works.
+  function buildHandleTiledSheets(printSheetEl, outline, bbox, plan) {
+    const tileW = plan.tileW, tileH = plan.tileH;
+    const w2 = handleState.boardWidth / 2;
+    let n = 0;
+    for (let r = 0; r < plan.rows; r++) {
+      for (let c = 0; c < plan.cols; c++) {
+        n++;
+        const svg = svgPage();
+        const clipId = 'htile' + r + '_' + c;
+        const defs = el('defs', {});
+        const cp = el('clipPath', { id: clipId });
+        cp.appendChild(el('rect', { x: MARGIN, y: MARGIN, width: tileW, height: tileH }));
+        defs.appendChild(cp);
+        svg.appendChild(defs);
+
+        const ox = MARGIN - bbox.minX - c * tileW;
+        const oy = MARGIN - bbox.minY - r * tileH;
+        // clip-path and transform must not sit on the same element: the clip
+        // rect would then be read in the translated space and slide with the
+        // tile, letting the shape bleed over the ruler. Wrapper clips in page
+        // coordinates, inner group does the offset.
+        const clipG = el('g', { 'clip-path': 'url(#' + clipId + ')' });
+        const g = el('g', { transform: 'translate(' + ox + ' ' + oy + ')' });
+        g.appendChild(el('path', { d: pointsToOpenPath(outline.allPts) + ' Z', fill: 'none', stroke: '#000', 'stroke-width': 0.02 }));
+        if (outline.holeD) g.appendChild(el('path', { d: outline.holeD, fill: 'none', stroke: '#000', 'stroke-width': 0.02 }));
+        if (outline.hole) g.appendChild(el('circle', { cx: outline.hole.cx, cy: outline.hole.cy, r: outline.hole.r, fill: 'none', stroke: '#000', 'stroke-width': 0.02 }));
+        g.appendChild(el('line', { x1: -w2, y1: 0, x2: w2, y2: 0, stroke: '#000', 'stroke-width': 0.015, 'stroke-dasharray': '0.08 0.06' }));
+        clipG.appendChild(g);
+        svg.appendChild(clipG);
+
+        // trim box, plus registration crosses so adjoining sheets line up
+        svg.appendChild(el('rect', { x: MARGIN, y: MARGIN, width: tileW, height: tileH, fill: 'none', stroke: '#999', 'stroke-width': 0.008, 'stroke-dasharray': '0.1 0.07' }));
+        [[MARGIN, MARGIN], [MARGIN + tileW, MARGIN], [MARGIN, MARGIN + tileH], [MARGIN + tileW, MARGIN + tileH]].forEach(function (p) {
+          svg.appendChild(el('line', { x1: p[0] - 0.09, y1: p[1], x2: p[0] + 0.09, y2: p[1], stroke: '#000', 'stroke-width': 0.01 }));
+          svg.appendChild(el('line', { x1: p[0], y1: p[1] - 0.09, x2: p[0], y2: p[1] + 0.09, stroke: '#000', 'stroke-width': 0.01 }));
+        });
+        if (c < plan.cols - 1) svg.appendChild(textEl({ x: MARGIN + tileW - 0.06, y: MARGIN + tileH / 2, 'font-size': 0.1, fill: '#000', 'font-family': 'sans-serif', 'text-anchor': 'end' }, 'tape \u2192 col ' + (c + 2)));
+        if (r < plan.rows - 1) svg.appendChild(textEl({ x: MARGIN + tileW / 2, y: MARGIN + tileH - 0.06, 'font-size': 0.1, fill: '#000', 'font-family': 'sans-serif', 'text-anchor': 'middle' }, 'tape \u2193 row ' + (r + 2)));
+
+        const rulerY = MARGIN + tileH + 0.2;
+        svg.appendChild(calibrationRulerSVG(MARGIN, rulerY));
+        svg.appendChild(textEl({ x: MARGIN, y: rulerY + calibrationRulerContentHeight() + 0.16, 'font-size': 0.11, fill: '#000', 'font-family': 'sans-serif' },
+          'Handle Maker \u2014 ' + HANDLE_FAMILY_NAMES[handleState.family] + '  \u00b7  sheet ' + n + ' of ' + plan.total +
+          ' (row ' + (r + 1) + ', col ' + (c + 1) + ')  \u00b7  TRUE 1:1 \u2014 trim on the dashed box and tape sheets together'));
+        printSheetEl.appendChild(wrapPrintPage(svg));
+      }
+    }
   }
 
   function buildHandlePrintSheet() {
@@ -1728,11 +1798,11 @@
     const outline = buildHandleOutline();
     const bbox = computeBBox(outline.allPts);
 
-    // safety net only: the swirl family's curl isn't simple to bound
-    // analytically like the other families' sliders are, so if a
-    // combination is ever big enough to risk overflowing the sheet,
-    // scale the whole design down rather than let it run off the page
-    const scale = Math.min(USABLE_W / bbox.w, USABLE_H / bbox.h, 1);
+    const plan = handleSheetPlan(bbox);
+    if (plan.tiled) { buildHandleTiledSheets(printSheetEl, outline, bbox, plan); return; }
+    // a pattern that gets traced onto wood is only any use at true size, so
+    // this path is always exactly 1:1 -- anything too big to fit is tiled above
+    const scale = 1;
 
     const svg = svgPage();
     const originX = PAGE_W / 2 - (bbox.minX + bbox.maxX) / 2 * scale;
