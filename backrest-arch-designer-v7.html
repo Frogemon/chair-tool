@@ -197,8 +197,8 @@
      always rendered black-on-white regardless of app theme: it's a physical
      tracing template, not a themed UI surface */
   #printSheet { display: none; }
-  .printPage { width: 8.5in; height: 11in; page-break-after: always; background: #fff; }
-  .printPage svg { width: 8.5in; height: 11in; display: block; }
+  .printPage { width: 7.5in; height: 9.5in; page-break-after: always; background: #fff; }
+  .printPage svg { width: 7.5in; height: 9.5in; display: block; }
 
   @media print {
     /* @page removes the browser/OS's own default margins, which would
@@ -207,7 +207,10 @@
        layout (not just hiding it) matters too: its 100vh sidebar was still
        occupying document height while invisible, which was enough on its
        own to spill the bottom of a full page onto a phantom second sheet */
-    @page { size: 8.5in 11in; margin: 0; }
+    /* real margins, not 0: the sheet we draw is already inset to the
+       printable area, so leaving the browser its own margin stops it
+       shrinking or re-paginating the page to make one of its own */
+    @page { size: 8.5in 11in; margin: 0.5in; }
     html, body { margin: 0; height: auto; }
     #app, #pngModal { display: none !important; }
     #printSheet { display: block !important; }
@@ -600,10 +603,18 @@
   // PAPER_* is the physical sheet and never changes. PAGE_*/USABLE_* are the
   // drawing coordinate system, which shrinks when the printer is known to
   // scale the page down -- see applyPrintCalibration().
-  const PAPER_W = 8.5, PAPER_H = 11, MARGIN = 0.5;
-  let PAGE_W = PAPER_W, PAGE_H = PAPER_H;
-  let USABLE_W = PAGE_W - 2 * MARGIN;   // 7.5 uncalibrated
-  let USABLE_H = PAGE_H - 2 * MARGIN;   // 10 uncalibrated
+  // SHEET_* is the block we actually draw and hand to the printer. It is
+  // deliberately smaller than the 8.5x11 paper: a printer cannot print to the
+  // edge, and iOS Safari additionally reserves space for the URL/date footer
+  // it adds. Handing it a full-bleed 8.5x11 block meant Safari had to shrink
+  // the page to fit (a 6in bar landed at 5 3/8in, 88.9%) and an 11in-tall
+  // block still overflowed, splitting every sheet across two -- a two-page
+  // pattern printed as four. A 7.5x9.5in block fits inside the printable area
+  // of both, so nothing is scaled and nothing overflows.
+  const SHEET_W = 7.5, SHEET_H = 9.5, MARGIN = 0.25;
+  let PAGE_W = SHEET_W, PAGE_H = SHEET_H;
+  let USABLE_W = PAGE_W - 2 * MARGIN;   // 7.0 uncalibrated
+  let USABLE_H = PAGE_H - 2 * MARGIN;   // 9.0 uncalibrated
 
   // How much the printer shrinks (or stretches) the page: the user prints
   // once, measures the 6in calibration bar and enters what it really came
@@ -620,7 +631,7 @@
 
   function applyPrintCalibration() {
     const c = printCalFactor();
-    PAGE_W = PAPER_W / c; PAGE_H = PAPER_H / c;
+    PAGE_W = SHEET_W / c; PAGE_H = SHEET_H / c;
     USABLE_W = PAGE_W - 2 * MARGIN;
     USABLE_H = PAGE_H - 2 * MARGIN;
   }
@@ -871,7 +882,7 @@
   // ---------------------------------------------------------------
 
   function svgPage() {
-    return el('svg', { xmlns: SVGNS, width: PAPER_W + 'in', height: PAPER_H + 'in', viewBox: '0 0 ' + PAGE_W + ' ' + PAGE_H });
+    return el('svg', { xmlns: SVGNS, width: SHEET_W + 'in', height: SHEET_H + 'in', viewBox: '0 0 ' + PAGE_W + ' ' + PAGE_H });
   }
   function wrapPrintPage(svg) {
     const div = document.createElement('div');
@@ -2362,7 +2373,7 @@
   function svgToPngBlob(svgEl, dpi) {
     return new Promise(function (resolve, reject) {
       const clone = svgEl.cloneNode(true);
-      const pxW = Math.round(PAPER_W * dpi), pxH = Math.round(PAPER_H * dpi);
+      const pxW = Math.round(SHEET_W * dpi), pxH = Math.round(SHEET_H * dpi);
       clone.setAttribute('width', pxW);
       clone.setAttribute('height', pxH);
       if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', '0 0 ' + PAGE_W + ' ' + PAGE_H);
