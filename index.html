@@ -142,6 +142,28 @@
   }
   .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
+  /* Calibration is the one control that can silently ruin a print: it scales
+     every pattern, and once set it persists across visits, so a value that was
+     right for one printer quietly over-corrects on a printer that has since
+     been fixed. Nothing on screen used to say it was active -- the only
+     mention lived on the printed sheet, which you only read after wasting the
+     paper. So its state is now stated in the app, before printing. */
+  .calStatus {
+    font-size: 11.5px; line-height: 1.45; margin-top: 8px; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--surface-alt);
+    display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap;
+  }
+  .calStatus.on { border-color: #d98324; background: rgba(217, 131, 36, 0.10); }
+  .calStatus .calStatusText { flex: 1 1 12em; min-width: 12em; }
+  .calStatus strong { font-weight: 700; }
+  .calStatus.on strong { color: #d98324; }
+  .calResetBtn {
+    flex: 0 0 auto; font: inherit; font-size: 11.5px; font-weight: 600;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--surface); color: var(--accent);
+  }
+  .calResetBtn:hover { background: var(--accent); color: var(--accent-contrast); }
+
   #controls select {
     width: 100%; padding: 8px; font-size: 13px; border: 1px solid var(--border);
     border-radius: 8px; background: var(--surface); color: var(--text); margin-bottom: 16px;
@@ -565,6 +587,10 @@
     <div class="field" id="calField">
       <label for="printCalInput">Printer calibration <output id="printCalInputVal"></output></label>
       <input type="range" id="printCalInput" min="4" max="8" step="0.0625">
+      <div class="calStatus" id="calStatus">
+        <span class="calStatusText" id="calStatusText"></span>
+        <button type="button" class="calResetBtn" id="calResetBtn" hidden>Reset to 6&quot;</button>
+      </div>
       <div class="hint">Print one sheet, measure the 6&quot; bar with a real ruler, and set this to what it actually came out to — the pattern is then corrected to true size. Remembered on this device. Printing from an iPhone or iPad usually needs this, because Safari reserves space for the URL/date footer it adds and shrinks the sheet to fit; no setting in the iOS print dialog turns that off.</div>
     </div>
 
@@ -992,18 +1018,36 @@
   // footprint so nothing here overlaps the traced curve itself. Shared by
   // both tools; each tool builds its own paragraph text and calls this with
   // its shape's left/right/bottom extents on the page.
+  // True when the ruler fits in the clear space under the shape. The old code
+  // only clamped the ruler against the page bottom, so a tall design pushed it
+  // up *into* the pattern and printed the red calibration text across the
+  // traced curve -- worst on a page shortened by an active correction, which
+  // is exactly when the ruler most needs to be readable. It now gets its own
+  // sheet instead of being drawn on top of the thing you are about to cut.
+  function rulerFitsBelow(shapeBottom) {
+    return shapeBottom + 0.28 + calibrationRulerContentHeight() <= PAGE_H - 0.05;
+  }
+
+  // set while building a sheet; tells the caller to append a calibration page
+  let rulerDeferred = false;
+
   function buildFooterLayout(shapeLeft, shapeRight, shapeBottom, paragraphs) {
     const g = el('g', {});
     const freeRightW = (PAGE_W - MARGIN) - shapeRight;
     const freeLeftW = shapeLeft - MARGIN;
     const freeBottomH = (PAGE_H - MARGIN) - shapeBottom;
 
-    // clamp so the ruler's own content (not just its anchor) always ends
-    // before the physical page bottom -- this is what was missing before
     const rulerContentH = calibrationRulerContentHeight();
-    const rulerY = Math.min(shapeBottom + 0.28, PAGE_H - rulerContentH - 0.05);
-    g.appendChild(calibrationRulerSVG(MARGIN, rulerY));
-    const rulerBottom = rulerY + rulerContentH;
+    const fits = rulerFitsBelow(shapeBottom);
+    let rulerBottom = shapeBottom;
+    if (fits) {
+      const rulerY = shapeBottom + 0.28;
+      g.appendChild(calibrationRulerSVG(MARGIN, rulerY));
+      rulerBottom = rulerY + rulerContentH;
+    } else {
+      rulerDeferred = true;
+      paragraphs = paragraphs.concat(['Scale check: the 6" calibration bar is on its own sheet at the end of this print job \u2014 this design is too tall to carry it.']);
+    }
 
     // below the ruler is the natural spot when there's room; otherwise use
     // whichever side of the shape has more free space. Not every width/
@@ -1023,6 +1067,21 @@
       g.appendChild(textBlock(paragraphs, x, MARGIN + 0.05, sideW - 0.3, 0.105, 0.15));
     }
     return g;
+  }
+
+  // A page carrying nothing but the ruler, for designs that leave no room for
+  // it. Printing it is optional -- it verifies scale, it is not part of the
+  // pattern -- so it says so rather than looking like a lost pattern page.
+  function buildCalibrationOnlySheet() {
+    const svg = svgPage();
+    svg.appendChild(calibrationRulerSVG(MARGIN, MARGIN + 0.5));
+    const y = MARGIN + 0.5 + calibrationRulerContentHeight() + 0.25;
+    svg.appendChild(textBlock([
+      'SCALE CHECK SHEET \u2014 not part of the pattern.',
+      'The pattern pages in this job were too tall to carry the calibration bar without printing it over the traced curve, so it is here instead.',
+      'Measure the bar above with a real ruler. If it is 6.00", every pattern page in this job printed at true size and you can cut to them directly.'
+    ], MARGIN, y, USABLE_W, 0.11, 0.155));
+    return wrapPrintPage(svg);
   }
 
   function buildFooter(shapeLeft, shapeRight, shapeBottom, shape, scale, extraParagraph, pageLabel) {
@@ -1100,8 +1159,10 @@
       return renderScaledGridFallback(pts, halfBBox, shape, mirror, pageLabel);
     }
 
+    rulerDeferred = false;
     printSheetEl.appendChild(buildPage(rightPts, false, 'Page 1 of 2 — right half'));
     printSheetEl.appendChild(buildPage(leftPts, true, 'Page 2 of 2 — left half (mirrored)'));
+    if (rulerDeferred) printSheetEl.appendChild(buildCalibrationOnlySheet());
   }
 
   // ---------------------------------------------------------------
@@ -1869,11 +1930,16 @@
   function buildHandlePrintSheet() {
     const printSheetEl = document.getElementById('printSheet');
     printSheetEl.innerHTML = '';
+    rulerDeferred = false;
     const outline = buildHandleOutline();
     const bbox = computeBBox(outline.allPts);
 
     const plan = handleSheetPlan(bbox);
-    if (plan.tiled) { buildHandleTiledSheets(printSheetEl, outline, bbox, plan); return; }
+    if (plan.tiled) {
+      buildHandleTiledSheets(printSheetEl, outline, bbox, plan);
+      if (rulerDeferred) printSheetEl.appendChild(buildCalibrationOnlySheet());
+      return;
+    }
     // a pattern that gets traced onto wood is only any use at true size, so
     // this path is always exactly 1:1 -- anything too big to fit is tiled above
     const scale = 1;
@@ -1897,6 +1963,7 @@
     const shapeLeft = originX + bbox.minX * scale, shapeRight = originX + bbox.maxX * scale, shapeBottom = originY + bbox.maxY * scale;
     svg.appendChild(buildFooterLayout(shapeLeft, shapeRight, shapeBottom, handleLabelParagraphs(scale)));
     printSheetEl.appendChild(wrapPrintPage(svg));
+    if (rulerDeferred) printSheetEl.appendChild(buildCalibrationOnlySheet());
   }
 
   // skipPrint is used while actively dragging a control point: the print
@@ -2769,20 +2836,51 @@
     (function () {
       const el2 = document.getElementById('printCalInput');
       const out = document.getElementById('printCalInputVal');
+      const statusEl = document.getElementById('calStatus');
+      const statusText = document.getElementById('calStatusText');
+      const resetBtn = document.getElementById('calResetBtn');
+
+      // State the correction in the units that actually go wrong: the percent
+      // the pattern is resized by, and what the 6in bar will physically
+      // measure if the printer is in fact accurate. Someone who has already
+      // fixed the underlying shrink can then see, without printing, that a
+      // leftover correction is about to make the pattern too big.
       const paint = function () {
         out.textContent = printCalMeasured.toFixed(3) + '" (' + toFraction16(printCalMeasured) + ')';
+        const off = Math.abs(printCalMeasured - 6) < 1e-9;
+        const c = printCalFactor();
+        statusEl.classList.toggle('on', !off);
+        resetBtn.hidden = off;
+        if (off) {
+          statusText.innerHTML = '<strong>Correction OFF.</strong> Patterns print at true 1:1 and the bar is drawn 6.00". '
+            + 'Try this first \u2014 only set a correction if the printed bar actually measures something else.';
+        } else {
+          statusText.innerHTML = '<strong>Correction ON \u2014 patterns enlarged '
+            + ((c - 1) * 100).toFixed(1) + '%.</strong> The 6" bar is drawn '
+            + (6 * c).toFixed(2) + '" so a printer that shrinks to ' + printCalMeasured.toFixed(3)
+            + '" lands it at 6.00". <em>If your printer is already accurate, this makes every pattern '
+            + ((c - 1) * 100).toFixed(1) + '% too big</em> \u2014 reset it.';
+        }
       };
       loadPrintCal();
       applyPrintCalibration();
       el2.value = printCalMeasured;
       paint();
-      el2.addEventListener('input', function () {
-        printCalMeasured = parseFloat(el2.value);
+      const applyCal = function () {
         applyPrintCalibration();
         savePrintCal();
         paint();
         refreshRangeFills();
         if (appMode === 'handle') renderHandle(); else render();
+      };
+      el2.addEventListener('input', function () {
+        printCalMeasured = parseFloat(el2.value);
+        applyCal();
+      });
+      resetBtn.addEventListener('click', function () {
+        printCalMeasured = 6;
+        el2.value = 6;
+        applyCal();
       });
     })();
     enhanceSelect(document.getElementById('presetSelect'));
